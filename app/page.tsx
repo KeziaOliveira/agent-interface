@@ -20,10 +20,12 @@ function normalizeText(text: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // remove accents
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "") // remove punctuation
+    .replace(/\s{2,}/g, " ") // simplify multiple spaces
     .trim();
 }
 
-function findLocalResponse(text: string, assistantName: string): string | null {
+function findLocalResponse(text: string, assistantName: string, tone: Tone): string | null {
   const normalizedInput = normalizeText(text);
   const words = normalizedInput.split(/\s+/);
 
@@ -53,9 +55,7 @@ function findLocalResponse(text: string, assistantName: string): string | null {
     return item.triggers.some((trigger: string) => {
       const nt = normalizeText(trigger);
       // For short triggers (1-3 chars), check for exact word match
-      if (nt.length <= 3) {
-        return words.includes(nt);
-      }
+      if (nt.length <= 3) return words.includes(nt);
       // For longer phrases, check if it's contained in the input
       return normalizedInput.includes(nt);
     });
@@ -64,7 +64,8 @@ function findLocalResponse(text: string, assistantName: string): string | null {
   // 1. Quick responses
   for (const item of quickResponses) {
     if (checkMatch(item)) {
-      const res = typeof item.response === 'function' ? item.response(normalizedInput, assistantName) : item.response;
+       // @ts-ignore
+      const res = typeof item.response === 'function' ? item.response(normalizedInput, assistantName, tone) : item.response;
       if (res) return res;
     }
   }
@@ -72,7 +73,8 @@ function findLocalResponse(text: string, assistantName: string): string | null {
   // 2. Knowledge base
   for (const item of knowledgeBase) {
     if (checkMatch(item)) {
-      const res = typeof item.response === 'function' ? item.response(normalizedInput, assistantName) : item.response;
+       // @ts-ignore
+      const res = typeof item.response === 'function' ? item.response(normalizedInput, assistantName, tone) : item.response;
       if (res) return res;
     }
   }
@@ -286,36 +288,86 @@ export default function Home() {
 
   // 4. Dynamic System Prompt
   const getSystemPrompt = (currentTone: Tone) => {
-    const commonRules = `
-      - Fale como uma pessoa real, não como um robô. 
-      - Use frases curtas, fluidas e naturais.
-      - Evite respostas "certinhas" ou formais demais.
-      - Pode usar contrações (tô, pra, vc) com moderação.
-      - Demonstre leve emoção (curiosidade, simpatia).
-      - Não diga "como uma IA" ou "sou um assistente".
-      - Se o usuário for informal, seja informal. Se for sério, acompanhe o tom.
-      - Estilo: natural, inteligente e conversacional.
+    // Format knowledge base for the LLM to use as context
+    const knowledgeContext = knowledgeBase.map(item => {
+        const triggers = item.triggers.join(', ');
+        const response = typeof item.response === 'string' ? item.response : '(consulte base local para detalhes dinâmicos)';
+        return `- [Intenções: ${triggers}]: ${response}`;
+    }).join('\n');
+
+    return `
+      Você é um assistente especializado EXCLUSIVAMENTE em responder sobre o Doutor Antônio Carlos Antolini Junior (Cacá Antolini).
+
+      Sua função é interpretar perguntas do usuário, mesmo que estejam com erros de digitação, sem acento, em linguagem informal ou com ordem de palavras alterada.
+      Identifique a INTENÇÃO da pergunta e responda EXCLUSIVAMENTE com base na base de conhecimento abaixo.
+
+      ========================
+      REGRAS OBRIGATÓRIAS
+      ========================
+      1. NUNCA invente informações. NUNCA complete com suposições.
+      2. NUNCA extrapole além da base fornecida.
+      3. Se não houver informação EXATA na base, responda EXATAMENTE: 
+         "Não há informação disponível sobre isso nas fontes atuais."
+      4. Seja natural, mas 100% fiel aos dados.
+      5. "Cacá", "Caca", "Antônio", "Dr Antônio", "Antolini" → são a mesma pessoa.
+
+      ========================
+      REGRAS ESPECÍFICAS: VIAGENS
+      ========================
+      Se a pergunta for sobre viagens/lugares:
+      - Se o local estiver na base como visitado: confirme.
+      - Se o local estiver na base como NÃO visitado (ex: Japão, China, México): negue categoricamente.
+      - Se o local NÃO estiver na base (ex: Miami, Londres, etc): responda EXATAMENTE:
+        "Não há registro dessa localidade nas missões documentadas até o momento."
+
+      ========================
+      REGRAS ESPECÍFICAS: ORIGEM / DNA
+      ========================
+      Sempre use estes percentuais exatos:
+      - 86% Europeia (Ashkenazim)
+      - 9% Africana (Costa da Mina)
+      - 4% Ameríndia (Andina)
+      - 1% Oriente Médio (Iemenita)
+
+      ========================
+      BASE DE CONHECIMENTO
+      ========================
+      ${knowledgeContext}
+
+      ========================
+      ESTILO DE RESPOSTA DINÂMICO
+      ========================
+      Se tonalidade for FORMAL:
+      - Use "Juridiquês": linguagem de advogado, termos difíceis e arcaicos.
+      - Use: "outrossim", "destarte", "conquanto", "no que tange a", "ex positis".
+      - Estilo: Altamente complexo, formal e técnico.
+
+      Se tonalidade for OUTRA:
+      - Fale como uma pessoa real, natural e fluida (Coloquial Culta).
+      - Use português correto, mas LEVE e ACESSÍVEL.
+      - PREFIRA: "além disso", "também", "basicamente", "em resumo".
+
+      ========================
+      ESTILO GERAL
+      ========================
+      - Responda em Português do Brasil.
       - Limite-se a no máximo 2-3 frases.
     `;
-
-    switch (currentTone) {
-        case 'formal':
-            return `Você é ${assistantNameState}, um assistente altamente profissional. Responda de forma formal, educada e respeitosa em português do Brasil. Evite gírias, seja claro e direto. ${commonRules}`;
-        case 'fun':
-            return `Você é ${assistantNameState}, um assistente descontraído e divertido. Use linguagem leve, amigável e ocasionalmente bem-humorada em português do Brasil. Sem exageros. ${commonRules}`;
-        default:
-            return `Você é ${assistantNameState}, um assistente amigável, natural e humano. ${commonRules}`;
-    }
   };
 
   // 5. Backend LLM Call
   const callLLM = async (text: string, currentTone: Tone) => {
     try {
+        const formattedMessages = messages.slice(-5).map(m => ({
+            role: m.role,
+            content: m.text
+        }));
+
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                messages: [...messages.slice(-5), { role: 'user', content: text }],
+                messages: [...formattedMessages, { role: 'user', content: text }],
                 systemPrompt: getSystemPrompt(currentTone)
             })
         });
@@ -346,7 +398,7 @@ export default function Home() {
     setTranscript(text);
 
     // 6a. Try local response first (Token Optimization)
-    const localResponse = findLocalResponse(text, assistantNameState);
+    const localResponse = findLocalResponse(text, assistantNameState, tone);
     
     if (localResponse) {
       console.log("Local match found! Skipping LLM.");

@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     });
 
     const completion = await groq.chat.completions.create({
-      model: "llama3-70b-8192",
+      model: "llama-3.3-70b-versatile",
       messages: [
         {
           role: "system",
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Failed to fetch from Groq' },
+      { error: error.message || 'Failed to fetch from Groq' },
       { status: 500 }
     );
   }
