@@ -8,9 +8,10 @@ interface AvatarProps {
   isSpeaking?: boolean;
   isLaughing?: boolean;
   isSmiling?: boolean;
+  theme?: 'dark' | 'light';
 }
 
-export default function Avatar({ isSpeaking = false, isLaughing = false, isSmiling = false }: AvatarProps) {
+export default function Avatar({ isSpeaking = false, isLaughing = false, isSmiling = false, theme = 'dark' }: AvatarProps) {
   const groupRef = useRef<Group>(null);
   const leftEyeRef = useRef<Mesh>(null);
   const rightEyeRef = useRef<Mesh>(null);
@@ -23,6 +24,9 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
   const [isBlinking, setIsBlinking] = useState(false);
   const blinkTimer = useRef(0);
   const nextBlink = useRef(2 + Math.random() * 3);
+
+  // Dynamic color based on theme
+  const materialColor = theme === 'light' ? '#3c9d00' : 'white';
 
   // Define the "D" shape for the filled laughing mouth
   const laughShape = useMemo(() => {
@@ -141,11 +145,11 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
       {/* Eyes */}
       <mesh ref={leftEyeRef} position={[-0.13, 0.17, 0]}>
         <capsuleGeometry args={[0.05, 0.15, 8, 16]} />
-        <meshBasicMaterial color="white" />
+        <meshBasicMaterial color={materialColor} />
       </mesh>
       <mesh ref={rightEyeRef} position={[0.13, 0.17, 0]}>
         <capsuleGeometry args={[0.05, 0.15, 8, 16]} />
-        <meshBasicMaterial color="white" />
+        <meshBasicMaterial color={materialColor} />
       </mesh>
 
       {/* Mouth Group */}
@@ -153,21 +157,21 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
         {/* Torus Mouth (Idle/Speaking) */}
         <mesh ref={torusRef}>
           <torusGeometry args={[0.25, 0.05, 12, 48, Math.PI * 0.7]} />
-          <meshBasicMaterial color="white" />
+          <meshBasicMaterial color={materialColor} />
         </mesh>
         <mesh ref={leftCapRef}>
           <sphereGeometry args={[0.05, 16, 16]} />
-          <meshBasicMaterial color="white" />
+          <meshBasicMaterial color={materialColor} />
         </mesh>
         <mesh ref={rightCapRef}>
           <sphereGeometry args={[0.05, 16, 16]} />
-          <meshBasicMaterial color="white" />
+          <meshBasicMaterial color={materialColor} />
         </mesh>
 
         {/* Filled Laughing/Smiling Mouth (Emoji Style) */}
         <mesh ref={laughMouthRef} visible={false}>
           <shapeGeometry args={[laughShape]} />
-          <meshBasicMaterial color="white" />
+          <meshBasicMaterial color={materialColor} />
         </mesh>
       </group>
     </group>
