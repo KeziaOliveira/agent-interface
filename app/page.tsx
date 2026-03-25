@@ -3,7 +3,6 @@
 import React, { Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import Avatar from '@/components/Avatar';
-import Groq from 'groq-sdk';
 import { quickResponses, knowledgeBase } from '@/data/knowledge';
 
 type Message = {
@@ -81,11 +80,7 @@ function findLocalResponse(text: string, assistantName: string): string | null {
   return null;
 }
 
-// 0. Initialize Groq
-const groq = new Groq({
-  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true,
-});
+
 
 export default function Home() {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -313,36 +308,33 @@ export default function Home() {
     }
   };
 
-  // 5. Groq AI Response Engine
-  const getAIResponse = async (text: string): Promise<string> => {
+  // 5. Backend LLM Call
+  const callLLM = async (text: string, currentTone: Tone) => {
     try {
-      const completion = await groq.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: getSystemPrompt(tone)
-          },
-          {
-            role: "user",
-            content: text
-          }
-        ],
-        model: "llama-3.3-70b-versatile",
-      });
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages: [...messages.slice(-5), { role: 'user', content: text }],
+                systemPrompt: getSystemPrompt(currentTone)
+            })
+        });
 
-      return completion.choices[0]?.message?.content || "";
+        if (!res.ok) {
+            const errorData = await res.json();
+            if (res.status === 429) throw new Error('rate_limit');
+            throw new Error(errorData.error || 'Failed to call LLM');
+        }
+
+        const data = await res.json();
+        return data.reply;
     } catch (error: any) {
-      console.error("Groq API Error:", error);
-      
-      // Handle Rate Limit (429)
-      if (error?.status === 429 || error?.message?.includes('rate_limit_exceeded')) {
-        return "Puxa, meus 'tokens' acabaram por agora! Pode tentar de novo em alguns minutos ou me fazer perguntas mais simples?";
-      }
-
-      // Random "Confused" message
-      return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+        console.error('LLM Call Error:', error);
+        throw error;
     }
   };
+
+
 
   // 6. Unified Message Handler
   const handleUserMessage = useCallback(async (text: string) => {
@@ -365,17 +357,31 @@ export default function Home() {
       setTimeout(() => speak(localResponse), 500);
       return;
     }
+    // 6b. LLM Fallback (Groq via Backend)
+    try {
+      const aiText = await callLLM(text, tone);
+      setResponse(aiText);
+      const aiMsg: Message = { role: 'assistant', text: aiText, timestamp: Date.now() + 100 };
+      setMessages(prev => [...prev, aiMsg]);
+      setIsLoading(false);
+      setTimeout(() => speak(aiText), 500);
+    } catch (error: any) {
+      console.error("LLM Error:", error);
+      
+      let errorResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+      
+      // Specific handling for Rate Limit (429)
+      if (error.message === 'rate_limit') {
+        errorResponse = "Puxa, meus 'tokens' acabaram por agora! Pode tentar de novo em alguns minutos ou me fazer perguntas mais simples? Eu ainda lembro de bastante coisa localmente!";
+      }
 
-    // 6b. Fallback to LLM
-    const aiText = await getAIResponse(text);
-    setResponse(aiText);
-    
-    const aiMsg: Message = { role: 'assistant', text: aiText, timestamp: Date.now() + 100 };
-    setMessages(prev => [...prev, aiMsg]);
-    setIsLoading(false);
-
-    setTimeout(() => speak(aiText), 500);
-  }, [isLoading, speak, tone, assistantNameState]);
+      setResponse(errorResponse);
+      const aiMsg: Message = { role: 'assistant', text: errorResponse, timestamp: Date.now() + 100 };
+      setMessages(prev => [...prev, aiMsg]);
+      setIsLoading(false);
+      setTimeout(() => speak(errorResponse), 500);
+    }
+  }, [isLoading, speak, tone, assistantNameState, messages]);
 
   // 7. Name Change Feedback State
   const [showNameSaved, setShowNameSaved] = useState(false);
