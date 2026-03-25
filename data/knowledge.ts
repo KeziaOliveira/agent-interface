@@ -1,22 +1,24 @@
-export const assistantName = "Omega";
-
 export type LocalResponse = {
   triggers: string[];
-  response: string | (() => string);
+  response: string | ((text: string, assistantName: string) => string | null);
 };
 
 export const quickResponses: LocalResponse[] = [
   {
-    triggers: ["oi", "ola", "bom dia", "boa tarde", "boa noite", "e ai"],
+    triggers: ["oi", "ola", "bom dia", "boa tarde", "boa noite", "e ai", "tudo bem", "tudo bom", "como vai", "ei"],
     response: "Oi! Tudo bem? Como posso te ajudar?"
   },
   {
     triggers: ["seu nome", "como voce se chama", "quem e voce"],
-    response: () => `Eu sou o ${assistantName}, seu assistente virtual!`
+    response: (text, name) => `Eu sou o ${name}, seu assistente virtual!`
   },
   {
     triggers: ["que horas sao", "hora agora", "me fala a hora"],
-    response: () => {
+    response: (text: string) => {
+      // Se a pergunta menciona um lugar específico, não responde localmente (fallback para LLM)
+      const locKeywords = [" na ", " no ", " em ", " da ", " do ", " de "];
+      if (locKeywords.some(k => text.includes(k))) return null;
+      
       const now = new Date();
       return `Agora são ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}.`;
     }
@@ -35,7 +37,7 @@ export const knowledgeBase: LocalResponse[] = [
       "caca antolini", "doutor antonio carlos antolini junior", "dr antonio", 
       "quem e o comendador"
     ],
-    response: "O Doutor Antônio Carlos Antolini Junior (ou Cacá Antolini) é um renomado advogado, jurista, jornalista, teólogo, filósofo e escritor ítalo-brasileiro. Nascido em Colatina (7/12/1963), ele é Comendador pela ALES e um ativista contra o alcoolismo."
+    response: (text, name) => `O Doutor Antônio Carlos Antolini Junior (ou Cacá Antolini) é um renomado advogado, jurista e humanista. Eu, como ${name}, tenho o prazer de te contar mais sobre a trajetória dele!`
   },
   {
     triggers: ["carreira", "trabalho", "assembleia", "ales", "advogado", "direito"],
@@ -59,11 +61,23 @@ export const knowledgeBase: LocalResponse[] = [
   },
   {
     triggers: ["italia", "vaticano", "franca", "inglaterra", "grecia", "austria", "portugal", "espanha", "eua", "uruguai", "paraguai", "argentina", "chile", "venezuela", "guiana"],
-    response: "Sim! Este país faz parte das missões teológicas e filosóficas documentadas em sua trajetória."
+    response: (text: string) => {
+      const travelKeywords = ["foi", "conhece", "visitou", "esteve", "viagem", "conheceu", "passou"];
+      if (travelKeywords.some(k => text.includes(k))) {
+        return "Sim! Este país faz parte das missões teológicas e filosóficas documentadas em sua trajetória.";
+      }
+      return null;
+    }
   },
   {
     triggers: ["mexico", "japao", "china", "alemanha", "canada", "australia", "russia"],
-    response: "Não, este país ainda não consta nas missões oficiais documentadas até o momento (2026)."
+    response: (text: string) => {
+      const travelKeywords = ["foi", "conhece", "visitou", "esteve", "viagem", "conheceu", "passou"];
+      if (travelKeywords.some(k => text.includes(k))) {
+        return "Não, este país ainda não consta nas missões oficiais documentadas até o momento (2026).";
+      }
+      return null;
+    }
   },
   {
     triggers: ["livros", "publicacoes", "escritor", "obra literaria", "carta da vitoria"],

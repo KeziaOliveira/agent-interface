@@ -45,10 +45,13 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
     laughFactor: 0,
   });
 
+  const timeRef = useRef(0);
+
   useFrame((state, delta) => {
     if (!groupRef.current) return;
 
-    const time = state.clock.getElapsedTime();
+    timeRef.current += delta;
+    const time = timeRef.current;
 
     // 1. Floating & Laughing Bounce
     animState.current.laughFactor = MathUtils.lerp(animState.current.laughFactor, isLaughing ? 1 : 0, 0.05);
