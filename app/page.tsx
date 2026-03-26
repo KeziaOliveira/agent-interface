@@ -160,9 +160,20 @@ export default function Home() {
   const loadVoices = useCallback(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
-    // Get all pt-BR voices
     const allVoices = window.speechSynthesis.getVoices();
-    const ptVoices = allVoices.filter(v => v.lang.includes('pt-BR'));
+    
+    // If voices haven't loaded yet, do nothing (wait for event or next poll)
+    if (allVoices.length === 0) return;
+    
+    // Get all pt-BR voices (handle variations like pt_BR, pt-br, PT-BR)
+    let ptVoices = allVoices.filter(v => 
+      v.lang.toLowerCase().replace('_', '-').includes('pt-br')
+    );
+    
+    // Disregard language filter if device has strictly no pt-BR voices installed at all
+    if (ptVoices.length === 0) {
+      ptVoices = allVoices;
+    }
     
     // Sort to prioritize premium-sounding voices (Google/Microsoft/Natural)
     const sortedVoices = [...ptVoices].sort((a, b) => {
@@ -188,24 +199,29 @@ export default function Home() {
   }, [selectedVoice]);
 
   useEffect(() => {
-    // Some browsers (Chrome) don't have voices ready on first call
-    // so we try immediately, then also listen for the event, and poll as fallback
     loadVoices();
 
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = loadVoices;
+      window.speechSynthesis.onvoiceschanged = () => {
+         loadVoices();
+      };
 
-      // Polling fallback: retry a few times if voices aren't ready yet
+      // Brave/Chrome delay loading voices. Poll for up to 5 seconds (50 attempts).
       let attempts = 0;
       const poll = setInterval(() => {
-        if (window.speechSynthesis.getVoices().length > 0 || attempts >= 5) {
+        if (window.speechSynthesis.getVoices().length > 0) {
           clearInterval(poll);
           loadVoices();
+        } else if (attempts >= 50) {
+          clearInterval(poll); // Give up after 5s
         }
         attempts++;
       }, 100);
 
-      return () => clearInterval(poll);
+      return () => {
+         clearInterval(poll);
+         window.speechSynthesis.onvoiceschanged = null;
+      };
     }
   }, [loadVoices]);
 
@@ -278,18 +294,49 @@ export default function Home() {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
+      
       const t = text.toLowerCase();
-      const isLaughText = 
-        t.includes('kkk') || t.includes('haha') || t.includes('hehe') ||
-        t.includes('huhu') || t.includes('rsrs') || t.includes('lol') ||
-        t.includes('(risos)') || t.includes('risos') || t.includes('(risadas)') ||
-        text.includes('😂') || text.includes('🤣') || text.includes('😅');
-      if (isLaughText) setIsLaughing(true);
+      const triggers = ['kkk', 'haha', 'hehe', 'huhu', 'rsrs', 'lol', '(risos)', 'risos', '(risadas)', '😂', '🤣', '😅'];
+      let laughIdx = -1;
+      
+      for (const trig of triggers) {
+        const idx = t.indexOf(trig);
+        if (idx !== -1 && (laughIdx === -1 || idx < laughIdx)) {
+          laughIdx = idx;
+        }
+      }
+
+      if (laughIdx !== -1) {
+        // If laugh is at the beginning (first 30%), laugh immediately while speaking
+        if (laughIdx < t.length * 0.3) {
+           setIsLaughing(true);
+        }
+      }
     };
     
     utterance.onend = () => {
       setIsSpeaking(false);
-      setIsLaughing(false);
+      setIsLaughing(false); // Safety reset
+      
+      const t = text.toLowerCase();
+      const triggers = ['kkk', 'haha', 'hehe', 'huhu', 'rsrs', 'lol', '(risos)', 'risos', '(risadas)', '😂', '🤣', '😅'];
+      let laughIdx = -1;
+      
+      for (const trig of triggers) {
+        const idx = t.indexOf(trig);
+        if (idx !== -1 && (laughIdx === -1 || idx < laughIdx)) {
+          laughIdx = idx;
+        }
+      }
+
+      if (laughIdx !== -1) {
+        // If laugh is at the end (punchline), laugh after delivering the joke
+        if (laughIdx >= t.length * 0.3) {
+           setIsLaughing(true);
+           setTimeout(() => setIsLaughing(false), 2500); // 2.5s laugh
+        }
+      }
+      
       if (text.toLowerCase().includes("te ajudar")) {
         setIsSmiling(true);
         setTimeout(() => setIsSmiling(false), 2500);
@@ -509,7 +556,13 @@ export default function Home() {
       </div>
 
       {/* 3D Scene */}
-      <div className="relative z-10 h-full w-full">
+      <div 
+        className="relative z-10 h-full w-full"
+        onClick={() => {
+            if (isLeftPanelOpen) setIsLeftPanelOpen(false);
+            if (isRightPanelOpen) setIsRightPanelOpen(false);
+        }}
+      >
         <Canvas camera={{ position: [0, 0, 3], fov: 40 }}>
           <ambientLight intensity={isDark ? 1.5 : 2} />
           <pointLight position={[5, 10, 5]} intensity={isDark ? 0.8 : 1.2} />
@@ -575,7 +628,7 @@ export default function Home() {
                     </svg>
                     <span className="text-[11px] font-medium">{isMuted ? 'Mudo' : 'Com Áudio'}</span>
                   </div>
-                  <div className={`w-8 h-4 rounded-full relative transition-all ${isMuted ? 'bg-white/10' : (isDark ? 'bg-blue-600' : 'bg-[#3c9d00]')}`}>
+                  <div className={`w-8 h-4 rounded-full relative transition-all ${isMuted ? 'bg-white/10' : (isDark ? 'bg-blue-600' : 'bg-blue-500')}`}>
                     <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${isMuted ? 'left-0.5' : 'left-4.5'}`} />
                   </div>
                 </button>
@@ -662,7 +715,7 @@ export default function Home() {
                         <div className={`p-3 rounded-2xl text-[13px] leading-relaxed font-light ${
                             msg.role === 'user' 
                             ? (isDark ? 'bg-white/10 text-white/90 rounded-tr-none' : 'bg-black/5 text-black rounded-tr-none border border-black/5') 
-                            : (isDark ? 'bg-blue-600/20 text-blue-50 border border-blue-500/20 rounded-tl-none shadow-[0_4px_20px_-5px_rgba(59,130,246,0.2)]' : 'bg-[#3c9d00]/10 text-[#2a6d00] border border-[#3c9d00]/20 rounded-tl-none')
+                            : (isDark ? 'bg-blue-600/20 text-blue-50 border border-blue-500/20 rounded-tl-none shadow-[0_4px_20px_-5px_rgba(59,130,246,0.2)]' : 'bg-blue-500/10 text-blue-700 border border-blue-500/20 rounded-tl-none')
                         }`}>
                             {msg.text}
                         </div>
@@ -683,10 +736,10 @@ export default function Home() {
             {isLoading && (
               <div className="self-start items-start opacity-70 animate-in fade-in duration-300">
                 <span className="text-[8px] opacity-20 uppercase tracking-widest mb-1">Omega</span>
-                <div className={`flex gap-1.5 p-3 rounded-2xl rounded-tl-none border ${isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-[#3c9d00]/10 border-[#3c9d00]/20'}`}>
-                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.3s] ${isDark ? 'bg-blue-400' : 'bg-[#3c9d00]'}`} />
-                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.15s] ${isDark ? 'bg-blue-400' : 'bg-[#3c9d00]'}`} />
-                  <div className={`w-1 h-1 rounded-full animate-bounce ${isDark ? 'bg-blue-400' : 'bg-[#3c9d00]'}`} />
+                <div className={`flex gap-1.5 p-3 rounded-2xl rounded-tl-none border ${isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.3s] ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
+                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.15s] ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
+                  <div className={`w-1 h-1 rounded-full animate-bounce ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
                 </div>
               </div>
             )}
@@ -702,7 +755,7 @@ export default function Home() {
                     placeholder="Diga algo..."
                     disabled={isLoading}
                     autoFocus={isRightPanelOpen}
-                    className={`w-full border rounded-2xl px-5 py-4 pr-14 text-sm focus:outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-blue-500/50 focus:bg-white/10 placeholder:text-white/20' : 'bg-black/5 border-black/5 text-black focus:border-[#3c9d00]/50 focus:bg-white placeholder:text-black/20'}`}
+                    className={`w-full border rounded-2xl px-5 py-4 pr-14 text-sm focus:outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-blue-500/50 focus:bg-white/10 placeholder:text-white/20' : 'bg-black/5 border-black/5 text-black focus:border-blue-500/50 focus:bg-white placeholder:text-black/20'}`}
                 />
                 <button
                     type="submit"
@@ -710,7 +763,7 @@ export default function Home() {
                     className={`absolute right-2 top-1/2 -translate-y-1/2 p-2.5 rounded-xl transition-all duration-300 ${
                         !inputValue.trim() || isLoading 
                         ? 'opacity-10' 
-                        : (isDark ? 'text-blue-400 hover:bg-blue-500/20 hover:text-blue-300' : 'text-[#3c9d00] hover:bg-[#3c9d00]/10')
+                        : (isDark ? 'text-blue-400 hover:bg-blue-500/20 hover:text-blue-300' : 'text-blue-500 hover:bg-blue-500/10')
                     }`}
                 >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5">
@@ -722,7 +775,7 @@ export default function Home() {
                 <p className={`text-[8px] uppercase tracking-widest opacity-20`}>Pressione Enter</p>
                 <div className="flex gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'opacity-10 bg-current'}`} title="Status Microfone" />
-                    <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? (isDark ? 'bg-blue-500 animate-pulse' : 'bg-[#3c9d00] animate-pulse') : 'opacity-10 bg-current'}`} title="Status IA" />
+                    <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-blue-500 animate-pulse' : 'opacity-10 bg-current'}`} title="Status IA" />
                 </div>
             </div>
         </div>
@@ -730,32 +783,30 @@ export default function Home() {
 
       {/* Toggles */}
       <button 
-        onClick={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
-        className={`absolute left-6 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 pointer-events-auto ${isLeftPanelOpen ? (isDark ? 'bg-white/10 border-white/20 -translate-x-2' : 'bg-white border-black/10 shadow-2xl -translate-x-2') : (isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 shadow-xl' : 'bg-white border-transparent shadow-lg hover:border-black/5')}`}
+        onClick={() => {
+            setIsLeftPanelOpen(!isLeftPanelOpen);
+            if (!isLeftPanelOpen) setIsRightPanelOpen(false);
+        }}
+        className={`absolute left-6 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 pointer-events-auto ${isLeftPanelOpen ? (isDark ? 'bg-white/10 border-white/20 translate-x-60' : 'bg-white border-black/10 shadow-2xl translate-x-60') : (isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 shadow-xl' : 'bg-white border-transparent shadow-lg hover:border-black/5')} ${isRightPanelOpen ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'}`}
       >
         <span className="w-5 h-5 flex items-center justify-center opacity-60">
-            {isLeftPanelOpen ? (
-                <span className="text-sm">←</span>
-            ) : (
-                <svg width="20" height="20" viewBox="0 0 640 640" style={{ fill: isDark ? 'white' : 'black' }}>
-                    <path d="M259.1 73.5C262.1 58.7 275.2 48 290.4 48L350.2 48C365.4 48 378.5 58.7 381.5 73.5L396 143.5C410.1 149.5 423.3 157.2 435.3 166.3L503.1 143.8C517.5 139 533.3 145 540.9 158.2L570.8 210C578.4 223.2 575.7 239.8 564.3 249.9L511 297.3C511.9 304.7 512.3 312.3 512.3 320C512.3 327.7 511.8 335.3 511 342.7L564.4 390.2C575.8 400.3 578.4 417 570.9 430.1L541 481.9C533.4 495 517.6 501.1 503.2 496.3L435.4 473.8C423.3 482.9 410.1 490.5 396.1 496.6L381.7 566.5C378.6 581.4 365.5 592 350.4 592L290.6 592C275.4 592 262.3 581.3 259.3 566.5L244.9 496.6C230.8 490.6 217.7 482.9 205.6 473.8L137.5 496.3C123.1 501.1 107.3 495.1 99.7 481.9L69.8 430.1C62.2 416.9 64.9 400.3 76.3 390.2L129.7 342.7C128.8 335.3 128.4 327.7 128.4 320C128.4 312.3 128.9 304.7 129.7 297.3L76.3 249.8C64.9 239.7 62.3 223 69.8 209.9L99.7 158.1C107.3 144.9 123.1 138.9 137.5 143.7L205.3 166.2C217.4 157.1 230.6 149.5 244.6 143.4L259.1 73.5zM320.3 400C364.5 399.8 400.2 363.9 400 319.7C399.8 275.5 363.9 239.8 319.7 240C275.5 240.2 239.8 276.1 240 320.3C240.2 364.5 276.1 400.2 320.3 400z"/>
-                </svg>
-            )}
+            <svg width="20" height="20" viewBox="0 0 640 640" style={{ fill: isDark ? 'white' : 'black' }}>
+                <path d="M259.1 73.5C262.1 58.7 275.2 48 290.4 48L350.2 48C365.4 48 378.5 58.7 381.5 73.5L396 143.5C410.1 149.5 423.3 157.2 435.3 166.3L503.1 143.8C517.5 139 533.3 145 540.9 158.2L570.8 210C578.4 223.2 575.7 239.8 564.3 249.9L511 297.3C511.9 304.7 512.3 312.3 512.3 320C512.3 327.7 511.8 335.3 511 342.7L564.4 390.2C575.8 400.3 578.4 417 570.9 430.1L541 481.9C533.4 495 517.6 501.1 503.2 496.3L435.4 473.8C423.3 482.9 410.1 490.5 396.1 496.6L381.7 566.5C378.6 581.4 365.5 592 350.4 592L290.6 592C275.4 592 262.3 581.3 259.3 566.5L244.9 496.6C230.8 490.6 217.7 482.9 205.6 473.8L137.5 496.3C123.1 501.1 107.3 495.1 99.7 481.9L69.8 430.1C62.2 416.9 64.9 400.3 76.3 390.2L129.7 342.7C128.8 335.3 128.4 327.7 128.4 320C128.4 312.3 128.9 304.7 129.7 297.3L76.3 249.8C64.9 239.7 62.3 223 69.8 209.9L99.7 158.1C107.3 144.9 123.1 138.9 137.5 143.7L205.3 166.2C217.4 157.1 230.6 149.5 244.6 143.4L259.1 73.5zM320.3 400C364.5 399.8 400.2 363.9 400 319.7C399.8 275.5 363.9 239.8 319.7 240C275.5 240.2 239.8 276.1 240 320.3C240.2 364.5 276.1 400.2 320.3 400z"/>
+            </svg>
         </span>
       </button>
 
       <button 
-        onClick={() => setIsRightPanelOpen(!isRightPanelOpen)}
-        className={`absolute right-6 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 pointer-events-auto ${isRightPanelOpen ? (isDark ? 'bg-white/10 border-white/20 translate-x-2' : 'bg-white border-black/10 shadow-2xl translate-x-2') : (isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 shadow-xl' : 'bg-white border-transparent shadow-lg hover:border-black/5')}`}
+        onClick={() => {
+            setIsRightPanelOpen(!isRightPanelOpen);
+            if (!isRightPanelOpen) setIsLeftPanelOpen(false);
+        }}
+        className={`absolute right-6 top-1/2 -translate-y-1/2 z-40 w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 pointer-events-auto ${isRightPanelOpen ? (isDark ? 'bg-white/10 border-white/20 -translate-x-[17rem]' : 'bg-white border-black/10 shadow-2xl -translate-x-[17rem]') : (isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 shadow-xl' : 'bg-white border-transparent shadow-lg hover:border-black/5')} ${isLeftPanelOpen ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'}`}
       >
         <span className="w-5 h-5 flex items-center justify-center opacity-60">
-            {isRightPanelOpen ? (
-                <span className="text-sm">→</span>
-            ) : (
-                <svg width="20" height="20" viewBox="0 0 640 640" style={{ fill: isDark ? 'white' : 'black' }}>
-                    <path d="M512 240c0 114.9-114.6 208-256 208c-37.1 0-72.3-6.4-104.1-17.9c-11.9 8.7-31.3 20.6-54.3 30.6C73.6 471.1 44.7 480 16 480c-6.5 0-12.3-3.9-14.8-9.9c-2.5-6-1.1-12.8 3.4-17.4l0 0 0 0c0.3-0.3 0.7-0.7 1.2-1.2c1.1-1.2 2.6-3.3 4.4-6c3.7-5.4 7.4-12.4 10.9-20.5c6.7-15.8 11.7-35 15.8-54.4C12 331 0 286.6 0 240C0 125.1 114.6 32 256 32s256 93.1 256 208z"/>
-                </svg>
-            )}
+            <svg width="20" height="20" viewBox="0 0 640 640" style={{ fill: isDark ? 'white' : 'black' }}>
+                <path d="M512 240c0 114.9-114.6 208-256 208c-37.1 0-72.3-6.4-104.1-17.9c-11.9 8.7-31.3 20.6-54.3 30.6C73.6 471.1 44.7 480 16 480c-6.5 0-12.3-3.9-14.8-9.9c-2.5-6-1.1-12.8 3.4-17.4l0 0 0 0c0.3-0.3 0.7-0.7 1.2-1.2c1.1-1.2 2.6-3.3 4.4-6c3.7-5.4 7.4-12.4 10.9-20.5c6.7-15.8 11.7-35 15.8-54.4C12 331 0 286.6 0 240C0 125.1 114.6 32 256 32s256 93.1 256 208z"/>
+            </svg>
         </span>
       </button>
 
@@ -774,17 +825,17 @@ export default function Home() {
           <button
             onClick={startListening}
             disabled={isListening || isSpeaking || isLoading}
-            className={`group relative flex items-center justify-center w-20 h-20 rounded-full border transition-all duration-700 shadow-2xl ${
+            className={`group relative flex items-center justify-center w-20 h-20 rounded-full border backdrop-blur-md transition-all duration-700 shadow-2xl ${
               isListening 
                 ? 'bg-red-500/20 border-red-500/40 scale-110 shadow-[0_0_40px_rgba(239,68,68,0.2)]' 
                 : (isSpeaking || isLoading)
                 ? `opacity-50 scale-95 border-inherit cursor-not-allowed` 
-                : (isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20' : 'bg-white border-black/5 hover:border-black/20')
+                : (isDark ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20' : 'bg-white/60 border-white/50 shadow-xl hover:bg-white/80 hover:border-black/5')
             }`}
           >
             {/* Processing indicator (Ring) */}
             {(isSpeaking || isLoading) && (
-              <div className={`absolute inset-0 rounded-full border-t-2 border-r-transparent border-b-transparent border-l-transparent animate-spin ${isDark ? 'border-blue-500' : 'border-[#3c9d00]'}`} />
+              <div className={`absolute inset-0 rounded-full border-t-2 border-r-transparent border-b-transparent border-l-transparent animate-spin ${isDark ? 'border-blue-500' : 'border-blue-500'}`} />
             )}
 
             <span className={`w-8 h-8 flex items-center justify-center transition-all ${isListening ? 'animate-pulse scale-125' : ''}`}>

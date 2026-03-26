@@ -26,7 +26,7 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
   const nextBlink = useRef(2 + Math.random() * 3);
 
   // Dynamic color based on theme
-  const materialColor = theme === 'light' ? '#3c9d00' : 'white';
+  const materialColor = theme === 'light' ? '#3b82f6' : 'white';
 
   // Define the "D" shape for the filled laughing mouth
   const laughShape = useMemo(() => {
