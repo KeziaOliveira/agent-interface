@@ -6,11 +6,21 @@ export type LocalResponse = {
 export const quickResponses: LocalResponse[] = [
   {
     triggers: ["oi", "ola", "bom dia", "boa tarde", "boa noite", "e ai", "tudo bem", "tudo bom", "como vai", "ei"],
-    response: "Oi! Tudo bem? Como posso te ajudar?"
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Meus cumprimentos, Prezada Excelência. Em que posso ser-lhe útil nesta oportunidade?`;
+        }
+        return "Oi! Tudo bem? Como posso te ajudar?";
+    }
   },
   {
     triggers: ["seu nome", "como voce se chama", "quem e voce"],
-    response: (text, name, tone) => `Eu sou o ${name}, seu assistente virtual!`
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Identifico-me como ${name}, seu assistente virtual de prontidão.`;
+        }
+        return `Eu sou o ${name}, seu assistente virtual!`;
+    }
   },
   {
     triggers: ["que horas sao", "hora agora", "me fala a hora"],
@@ -20,12 +30,21 @@ export const quickResponses: LocalResponse[] = [
       if (locKeywords.some(k => text.includes(k))) return null;
       
       const now = new Date();
-      return `Agora são ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}.`;
+      const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+      if (tone === 'formal') {
+          return `O horário oficial registra, no presente momento, ${timeStr}.`;
+      }
+      return `Agora são ${timeStr}.`;
     }
   },
   {
     triggers: ["como voce esta", "tudo bem", "como vai"],
-    response: "Tô ótimo, valeu por perguntar! E você?"
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Tudo transcorre na mais perfeita ordem, agradeço vossa gentileza. E com você, como prosseguem vossos afazeres?`;
+        }
+        return "Tô ótimo, valeu por perguntar! E você?";
+    }
   }
 ];
 
@@ -69,29 +88,57 @@ export const knowledgeBase: LocalResponse[] = [
   },
   {
     triggers: ["carreira", "trabalho", "assembleia", "ales", "advogado", "direito"],
-    response: "Ele tem uma trajetória de muito sucesso no Direito Civil e no Poder Legislativo (ALES), onde entrou por concurso em 1983. Atuou como servidor até 2008 e é advogado e jornalista de formação clássica."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `O Doutor Antônio Carlos Antolini Junior incursionou no Poder Legislativo (ALES) via concurso público em 1983. Exerceu múnus como servidor efetivo até 2008, aliando à referida função a advocacia (OAB-ES 4.557) e o jornalismo profissional.`;
+        }
+        return "Ele tem uma trajetória de muito sucesso no Direito Civil e no Poder Legislativo (ALES), onde entrou por concurso em 1983. Atuou como servidor até 2008 e é advogado e jornalista de formação clássica.";
+    }
   },
   {
     triggers: ["premios", "honrarias", "conquistas", "distincoes", "comendador"],
-    response: "Ele conquistou prêmios importantes como o Innovare na Justiça e o Braslider na Literatura. Além disso, recebeu honrarias da Academia de Letras de Maceió e, em 2025, ganhou o título de Comendador pela Assembleia Legislativa do ES."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Láureas de escol lhes foram outorgadas, tais como o Prêmio Innovare e o prêmio Braslider. Ademais, foi agraciado com o título de Comendador pela veneranda Assembleia Legislativa do ES em 2025.`;
+        }
+        return "Ele conquistou prêmios importantes como o Innovare na Justiça e o Braslider na Literatura. Além disso, recebeu honrarias da Academia de Letras de Maceió e, em 2025, ganhou o título de Comendador pela Assembleia Legislativa do ES.";
+    }
   },
   {
     triggers: ["estudos", "formacao", "escola", "faculdade", "ufes"],
-    response: "Formado em Direito em 1985, ele estudou em colégios tradicionais como Maristas e Salesianos. Também chegou a cursar Engenharia Mecânica e Jornalismo na UFES, mas seguiu mesmo a carreira no Direito e na Assembleia."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Egressado do curso de Direito em 1985, sua base acadêmica remonta a instituições de tradição Marista e Salesiana. Outrossim, cursou Engenharia e Jornalismo na UFES, optando pela prevalência da ciência jurídica.`;
+        }
+        return "Formado em Direito em 1985, ele estudou em colégios tradicionais como Maristas e Salesianos. Também chegou a cursar Engenharia Mecânica e Jornalismo na UFES, mas seguiu mesmo a carreira no Direito e na Assembleia.";
+    }
   },
   {
     triggers: ["familia", "filhas", "onde mora"],
-    response: "Hoje ele vive em Vitória/ES, de forma mais reservada e focada nos estudos, contando sempre com o apoio e carinho de suas filhas, Glenda e Sophia Antolini."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Atualmente, reside no município de Vitória/ES em reclusão intelectual, sob a égide e amparo dileto de suas progenitoras Glenda e Sophia Antolini.`;
+        }
+        return "Hoje ele vive em Vitória/ES, de forma mais reservada e focada nos estudos, contando sempre com o apoio e carinho de suas filhas, Glenda e Sophia Antolini.";
+    }
   },
   {
     triggers: ["viagens", "paises", "exterior", "onde ja viajou", "paises visitados"],
-    response: "O Doutor Antônio Carlos Antolini Junior já viajou por grandes centros culturais do mundo, passando pela Europa e pelas Américas. Inclusive, tem uma missão planejada para a África do Sul em 2026."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `O Doutor Antônio Carlos Antolini Junior peregrinou por diversos centros da civilização mundial, destacando-se missões na Europa e Américas, com projeção transcontinental para a África em 2026.`;
+        }
+        return "O Doutor Antônio Carlos Antolini Junior já viajou por grandes centros culturais do mundo, passando pela Europa e pelas Américas. Inclusive, tem uma missão planejada para a África do Sul em 2026.";
+    }
   },
   {
     triggers: ["brasil", "vitoria", "espirito santo", "minas gerais", "mg", "es", "italia", "vaticano", "franca", "inglaterra", "grecia", "austria", "portugal", "espanha", "eua", "uruguai", "paraguai", "argentina", "chile", "venezuela", "guiana"],
-    response: (text: string, name: string, tone: string) => {
+    response: (text, name, tone) => {
       const travelKeywords = ["foi", "conhece", "visitou", "esteve", "viagem", "conheceu", "passou", "mora", "reside"];
       if (travelKeywords.some(k => text.includes(k))) {
+        if (tone === 'formal') {
+            return `Afirmativo. Referida localidade integra as missões e a veneranda trajetória documentada do jurista.`;
+        }
         return "Sim! Esse lugar faz parte da história e das missões dele pelo mundo.";
       }
       return null;
@@ -99,26 +146,57 @@ export const knowledgeBase: LocalResponse[] = [
   },
   {
     triggers: ["esteve em", "esteve no", "esteve na", "foi para", "foi pro", "foi pra", "conhece o", "conhece a", "visitou o", "visitou a", "passou por", "conheceu"],
-    response: "Não há registro dessa localidade nas missões documentadas até o momento."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Não há registro de tal incursão geográfica nas diligências e fontes documentais acostadas até a presente data.`;
+        }
+        return "Não há registro dessa localidade nas missões documentadas até o momento.";
+    }
   },
   {
     triggers: ["livros", "publicacoes", "escritor", "obra literaria", "carta da vitoria"],
-    response: "É autor dos livros: 'A Carta da Vitória do Espírito Santo!', 'Buscai e Vos Será Dado! O Evangelho Nada Secreto de Antônio!' e 'De Advogado e de Louco, Todos Temos Um Pouco'."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Sua produção intelectiva reside nas obras: 'A Carta da Vitória do Espírito Santo!', 'Buscai e Vos Será Dado!' e 'De Advogado e de Louco, Todos Temos Um Pouco'.`;
+        }
+        return "Ele escreveu livros inspiradores como 'A Carta da Vitória do Espírito Santo!', 'Buscai e Vos Será Dado!' e 'De Advogado e de Louco, Todos Temos Um Pouco'.";
+    }
   },
   {
     triggers: ["dna", "origem", "etnia", "raizes", "genetica"],
-    response: "Sua identidade é poliétnica: 86% Europeia (Ashkenazim), 9% Africana (Costa da Mina), 4% Ameríndia (Andina) e 1% Oriente Médio (Iemenita)."
+    response: (text, name, tone) => {
+        const dna = "86% Europeia (Ashkenazim), 9% Africana (Costa da Mina), 4% Ameríndia (Andina) e 1% Oriente Médio (Iemenita).";
+        if (tone === 'formal') {
+            return `Sua composição genômica, sob o viés da ancestralidade, revela: ${dna}`;
+        }
+        return `A origem dele é uma mistura bem rica: ${dna}`;
+    }
   },
   {
     triggers: ["alcool", "ativismo", "veneno"],
-    response: "É uma voz ativa contra o consumo de álcool, substância que classifica categoricamente como um 'veneno social', transformando sua própria superação em ativismo social."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `O jurista mantém estrita militância contra o consumo do álcool, classificando-o como estigma e veneno social passível de superação.`;
+        }
+        return "Ele é uma voz forte contra o álcool, que ele chama de veneno social, incentivando as pessoas a superarem esse hábito.";
+    }
   },
   {
     triggers: ["rei das duvidas"],
-    response: "Sim, ele se considera o 'rei das dúvidas' devido à sua constante busca filosófica e teológica."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Correto. A alcunha de 'rei das dúvidas' exprime sua incessante busca filosófica por respostas teológicas.`;
+        }
+        return "Sim, ele se define como o 'rei das dúvidas' por estar sempre em busca de novas respostas filosóficas.";
+    }
   },
   {
     triggers: ["valeu", "obrigado", "obrigada", "ajudou muito"],
-    response: "Imagina! Tô aqui pra isso. Precisando, é só chamar."
+    response: (text, name, tone) => {
+        if (tone === 'formal') {
+            return `Não há de quê. Permaneço à disposição para novos esclarecimentos que se fizerem necessários.`;
+        }
+        return "Imagina! Tô aqui pra isso sempre que precisar.";
+    }
   }
 ];

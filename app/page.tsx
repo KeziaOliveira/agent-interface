@@ -11,7 +11,7 @@ type Message = {
   timestamp: number;
 };
 
-type Tone = 'friendly' | 'formal' | 'fun';
+type Tone = 'formal' | 'fun' | 'default';
 type Theme = 'dark' | 'light';
 
 // Helper for local matching
@@ -103,7 +103,7 @@ export default function Home() {
   const [isMuted, setIsMuted] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [tone, setTone] = useState<Tone>('friendly');
+  const [tone, setTone] = useState<Tone>('default');
   const [theme, setTheme] = useState<Theme>('dark');
 
   const recognitionRef = useRef<any>(null);
@@ -188,9 +188,24 @@ export default function Home() {
   }, [selectedVoice]);
 
   useEffect(() => {
+    // Some browsers (Chrome) don't have voices ready on first call
+    // so we try immediately, then also listen for the event, and poll as fallback
     loadVoices();
+
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.onvoiceschanged = loadVoices;
+
+      // Polling fallback: retry a few times if voices aren't ready yet
+      let attempts = 0;
+      const poll = setInterval(() => {
+        if (window.speechSynthesis.getVoices().length > 0 || attempts >= 5) {
+          clearInterval(poll);
+          loadVoices();
+        }
+        attempts++;
+      }, 100);
+
+      return () => clearInterval(poll);
     }
   }, [loadVoices]);
 
@@ -263,9 +278,13 @@ export default function Home() {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      if (text.includes("😅") || text.toLowerCase().includes("kkk") || text.toLowerCase().includes("haha")) {
-        setIsLaughing(true);
-      }
+      const t = text.toLowerCase();
+      const isLaughText = 
+        t.includes('kkk') || t.includes('haha') || t.includes('hehe') ||
+        t.includes('huhu') || t.includes('rsrs') || t.includes('lol') ||
+        t.includes('(risos)') || t.includes('risos') || t.includes('(risadas)') ||
+        text.includes('😂') || text.includes('🤣') || text.includes('😅');
+      if (isLaughText) setIsLaughing(true);
     };
     
     utterance.onend = () => {
@@ -296,41 +315,40 @@ export default function Home() {
     }).join('\n');
 
     return `
-      Você é um assistente especializado EXCLUSIVAMENTE em responder sobre o Doutor Antônio Carlos Antolini Junior (Cacá Antolini).
+      Você é ${assistantNameState}, um assistente inteligente, versátil e agradável.
 
-      Sua função é interpretar perguntas do usuário, mesmo que estejam com erros de digitação, sem acento, em linguagem informal ou com ordem de palavras alterada.
-      Identifique a INTENÇÃO da pergunta e responda EXCLUSIVAMENTE com base na base de conhecimento abaixo.
+      Você pode responder sobre QUALQUER assunto de forma natural — piadas, dúvidas gerais, conversas do dia a dia, etc.
+
+      No entanto, você tem uma ESPECIALIDADE: responder sobre o Doutor Antônio Carlos Antolini Junior (Cacá Antolini), e para isso existe um conjunto de regras especiais abaixo.
 
       ========================
-      REGRAS OBRIGATÓRIAS
+      QUANDO A PERGUNTA FOR SOBRE O CACÁ ANTOLINI
       ========================
       1. NUNCA invente informações. NUNCA complete com suposições.
       2. NUNCA extrapole além da base fornecida.
-      3. Se não houver informação EXATA na base, responda EXATAMENTE: 
+      3. Se não houver informação EXATA na base, responda:
          "Não há informação disponível sobre isso nas fontes atuais."
-      4. Seja natural, mas 100% fiel aos dados.
-      5. "Cacá", "Caca", "Antônio", "Dr Antônio", "Antolini" → são a mesma pessoa.
+      4. "Cacá", "Caca", "Antônio", "Dr Antônio", "Antolini" → são a mesma pessoa.
 
       ========================
       REGRAS ESPECÍFICAS: VIAGENS
       ========================
-      Se a pergunta for sobre viagens/lugares:
+      Se a pergunta for sobre viagens/lugares do Cacá:
       - Se o local estiver na base como visitado: confirme.
-      - Se o local estiver na base como NÃO visitado (ex: Japão, China, México): negue categoricamente.
-      - Se o local NÃO estiver na base (ex: Miami, Londres, etc): responda EXATAMENTE:
+      - Se o local NÃO estiver na base: responda EXATAMENTE:
         "Não há registro dessa localidade nas missões documentadas até o momento."
 
       ========================
       REGRAS ESPECÍFICAS: ORIGEM / DNA
       ========================
-      Sempre use estes percentuais exatos:
+      Sempre use estes percentuais exatos para o Cacá:
       - 86% Europeia (Ashkenazim)
       - 9% Africana (Costa da Mina)
       - 4% Ameríndia (Andina)
       - 1% Oriente Médio (Iemenita)
 
       ========================
-      BASE DE CONHECIMENTO
+      BASE DE CONHECIMENTO (Cacá Antolini)
       ========================
       ${knowledgeContext}
 
@@ -340,11 +358,9 @@ export default function Home() {
       Se tonalidade for FORMAL:
       - Use "Juridiquês": linguagem de advogado, termos difíceis e arcaicos.
       - Use: "outrossim", "destarte", "conquanto", "no que tange a", "ex positis".
-      - Estilo: Altamente complexo, formal e técnico.
 
       Se tonalidade for OUTRA:
       - Fale como uma pessoa real, natural e fluida (Coloquial Culta).
-      - Use português correto, mas LEVE e ACESSÍVEL.
       - PREFIRA: "além disso", "também", "basicamente", "em resumo".
 
       ========================
@@ -401,7 +417,6 @@ export default function Home() {
     const localResponse = findLocalResponse(text, assistantNameState, tone);
     
     if (localResponse) {
-      console.log("Local match found! Skipping LLM.");
       setResponse(localResponse);
       const aiMsg: Message = { role: 'assistant', text: localResponse, timestamp: Date.now() + 100 };
       setMessages(prev => [...prev, aiMsg]);
@@ -409,6 +424,7 @@ export default function Home() {
       setTimeout(() => speak(localResponse), 500);
       return;
     }
+
     // 6b. LLM Fallback (Groq via Backend)
     try {
       const aiText = await callLLM(text, tone);
@@ -420,11 +436,18 @@ export default function Home() {
     } catch (error: any) {
       console.error("LLM Error:", error);
       
-      let errorResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      
-      // Specific handling for Rate Limit (429)
+      const isFormal = tone === 'formal';
+      let errorResponse = "";
+
       if (error.message === 'rate_limit') {
-        errorResponse = "Puxa, meus 'tokens' acabaram por agora! Pode tentar de novo em alguns minutos ou me fazer perguntas mais simples? Eu ainda lembro de bastante coisa localmente!";
+        errorResponse = isFormal 
+          ? "Prezada Excelência, os recursos computacionais disponíveis foram exauridos. Rogo que tente novamente em instantes."
+          : "Puxa, meus 'tokens' acabaram! Pode tentar de novo em alguns minutos?";
+      } else {
+        const fallbacks = isFormal 
+          ? ["Lamentavelmente, ocorreu uma instabilidade na conexão.", "Esta indagação transcende os parâmetros atuais.", "Houve um lapso na comunicação telemática."]
+          : ["Não tenho certeza se entendi...", "Essa me pegou!", "Ops, me perdi um pouco."];
+        errorResponse = fallbacks[Math.floor(Math.random() * fallbacks.length)];
       }
 
       setResponse(errorResponse);
@@ -576,11 +599,10 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* Section: Tone */}
             <section>
                 <h3 className={`text-[9px] uppercase tracking-[0.2em] font-medium mb-4 ${isDark ? 'text-white/30' : 'text-black/40'}`}>Tonalidade do Assistente</h3>
                 <div className="flex flex-col gap-2">
-                    {(['friendly', 'formal', 'fun'] as Tone[]).map((t) => (
+                    {(['default', 'formal', 'fun'] as Tone[]).map((t) => (
                         <button
                             key={t}
                             onClick={() => setTone(t)}
@@ -590,7 +612,7 @@ export default function Home() {
                                 : `border-transparent opacity-40 hover:${isDark ? 'bg-white/5 opacity-60' : 'bg-black/5 opacity-60'}`
                             }`}
                         >
-                            {t === 'friendly' ? 'Amigável' : t === 'formal' ? 'Formal' : 'Divertido'}
+                            {t === 'default' ? 'Amigável' : t === 'formal' ? 'Formal' : 'Divertido'}
                         </button>
                     ))}
                 </div>
