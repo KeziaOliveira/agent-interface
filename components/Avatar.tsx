@@ -9,9 +9,10 @@ interface AvatarProps {
   isLaughing?: boolean;
   isSmiling?: boolean;
   theme?: 'dark' | 'light';
+  isFeminine?: boolean;
 }
 
-export default function Avatar({ isSpeaking = false, isLaughing = false, isSmiling = false, theme = 'dark' }: AvatarProps) {
+export default function Avatar({ isSpeaking = false, isLaughing = false, isSmiling = false, theme = 'dark', isFeminine = false }: AvatarProps) {
   const groupRef = useRef<Group>(null);
   const leftEyeRef = useRef<Mesh>(null);
   const rightEyeRef = useRef<Mesh>(null);
@@ -25,8 +26,8 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
   const blinkTimer = useRef(0);
   const nextBlink = useRef(2 + Math.random() * 3);
 
-  // Dynamic color based on theme
-  const materialColor = theme === 'light' ? '#3b82f6' : 'white';
+  // Dynamic color based on theme and voice gender
+  const materialColor = theme === 'light' ? (isFeminine ? '#ec4899' : '#3b82f6') : 'white';
 
   // Define the "D" shape for the filled laughing mouth
   const laughShape = useMemo(() => {

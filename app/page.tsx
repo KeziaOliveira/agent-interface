@@ -14,6 +14,13 @@ type Message = {
 type Tone = 'formal' | 'fun' | 'default';
 type Theme = 'dark' | 'light';
 
+// ElevenLabs Pre-made Voices Catalog
+const ELEVENLABS_VOICES = [
+  { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella', gender: 'Feminina', style: 'Suave, quente' },
+  { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', gender: 'Masculina', style: 'Profissional' },
+  { id: 'VR6AewLTigWG4xSOukaG', name: 'Arnold', gender: 'Masculina', style: 'Autoritária' },
+];
+
 // Helper for local matching
 function normalizeText(text: string) {
   return text
@@ -95,8 +102,6 @@ export default function Home() {
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
   
   // NEW: Settings States
   const [assistantNameState, setAssistantNameState] = useState('Omega');
@@ -105,6 +110,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [tone, setTone] = useState<Tone>('default');
   const [theme, setTheme] = useState<Theme>('dark');
+  const [selectedVoiceId, setSelectedVoiceId] = useState('EXAVITQu4vr4xnSDxMaL');
 
   const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -126,11 +132,13 @@ export default function Home() {
         const savedTheme = localStorage.getItem('omega_theme') as Theme;
         const savedName = localStorage.getItem('omega_name');
         const savedMuted = localStorage.getItem('omega_muted');
+        const savedVoice = localStorage.getItem('omega_voiceId');
         
         if (savedTone) setTone(savedTone);
         if (savedTheme) setTheme(savedTheme);
         if (savedName) setAssistantNameState(savedName);
         if (savedMuted) setIsMuted(savedMuted === 'true');
+        if (savedVoice) setSelectedVoiceId(savedVoice);
         
         isLoaded.current = true;
     }
@@ -143,11 +151,9 @@ export default function Home() {
         localStorage.setItem('omega_theme', theme);
         localStorage.setItem('omega_name', assistantNameState);
         localStorage.setItem('omega_muted', String(isMuted));
-        if (selectedVoice) {
-            localStorage.setItem('omega_voice', selectedVoice.name);
-        }
+        localStorage.setItem('omega_voiceId', selectedVoiceId);
     }
-  }, [tone, theme, selectedVoice, assistantNameState, isMuted]);
+  }, [tone, theme, assistantNameState, isMuted, selectedVoiceId]);
 
   // Auto-scroll chat history
   useEffect(() => {
@@ -156,145 +162,47 @@ export default function Home() {
     }
   }, [messages, isRightPanelOpen, isLoading]);
 
-  // Load Voices with Premium Preference
-  const loadVoices = useCallback(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    
-    const allVoices = window.speechSynthesis.getVoices();
-    
-    // If voices haven't loaded yet, do nothing (wait for event or next poll)
-    if (allVoices.length === 0) return;
-    
-    // Get all pt-BR voices (handle variations like pt_BR, pt-br, PT-BR)
-    let ptVoices = allVoices.filter(v => 
-      v.lang.toLowerCase().replace('_', '-').includes('pt-br')
-    );
-    
-    // Disregard language filter if device has strictly no pt-BR voices installed at all
-    if (ptVoices.length === 0) {
-      ptVoices = allVoices;
-    }
-    
-    // Sort to prioritize premium-sounding voices (Google/Microsoft/Natural)
-    const sortedVoices = [...ptVoices].sort((a, b) => {
-      const aLower = a.name.toLowerCase();
-      const bLower = b.name.toLowerCase();
-      
-      const isAPremium = aLower.includes('google') || aLower.includes('natural') || aLower.includes('maria');
-      const isBPremium = bLower.includes('google') || bLower.includes('natural') || bLower.includes('maria');
-      
-      if (isAPremium && !isBPremium) return -1;
-      if (!isAPremium && isBPremium) return 1;
-      return 0;
-    });
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
-    setVoices(sortedVoices);
-    
-    // Set default or saved voice
-    if (!selectedVoice && sortedVoices.length > 0) {
-      const savedVoiceName = localStorage.getItem('omega_voice');
-      const savedVoice = sortedVoices.find(v => v.name === savedVoiceName);
-      setSelectedVoice(savedVoice || sortedVoices[0]);
-    }
-  }, [selectedVoice]);
-
-  useEffect(() => {
-    loadVoices();
-
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = () => {
-         loadVoices();
-      };
-
-      // Brave/Chrome delay loading voices. Poll for up to 5 seconds (50 attempts).
-      let attempts = 0;
-      const poll = setInterval(() => {
-        if (window.speechSynthesis.getVoices().length > 0) {
-          clearInterval(poll);
-          loadVoices();
-        } else if (attempts >= 50) {
-          clearInterval(poll); // Give up after 5s
-        }
-        attempts++;
-      }, 100);
-
-      return () => {
-         clearInterval(poll);
-         window.speechSynthesis.onvoiceschanged = null;
-      };
-    }
-  }, [loadVoices]);
-
-  // 3. Text-to-Speech & Sequential Animations
+  // 3. Text-to-Speech & Sequential Animations (ElevenLabs API)
   const speak = useCallback(async (text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (!text || isMuted) return;
 
-    window.speechSynthesis.cancel();
+    // Interrupt current audio if already playing
+    if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.currentTime = 0;
+        activeAudioRef.current = null;
+    }
+
     setIsSpeaking(false);
     setIsLaughing(false);
     setIsSmiling(false);
 
-    if (isMuted) return; // Skip speech if muted
-
-    // Specific sequence for Token Limit (Special Case)
+    // Contextual Token Exhaustion Fallback
     if (text.includes("meus 'tokens' acabaram")) {
-      const parts = [
-        "Puxa, meus 'tokens' acabaram por agora!",
-        "Pode tentar de novo em alguns minutos ou me fazer perguntas mais simples?"
-      ];
+      text = "Puxa, meus 'tokens' acabaram por agora! Pode tentar de novo em alguns minutos ou me fazer perguntas mais simples?";
+    }
 
-      // Part 1
-      await new Promise<void>((resolve) => {
-        const u = new SpeechSynthesisUtterance(parts[0]);
-        u.lang = 'pt-BR';
-        if (selectedVoice) u.voice = selectedVoice;
-        u.onstart = () => setIsSpeaking(true);
-        u.onend = () => {
-          setIsSpeaking(false);
-          resolve();
-        };
-        window.speechSynthesis.speak(u);
+    try {
+      setIsLoading(true); // Show loading while ElevenLabs generates audio
+
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice_id: selectedVoiceId })
       });
 
-      // Quick Laugh
-      setIsLaughing(true);
-      await new Promise(r => setTimeout(r, 1500));
-      setIsLaughing(false);
-
-      // Part 2
-      const u2 = new SpeechSynthesisUtterance(parts[1]);
-      u2.lang = 'pt-BR';
-      if (selectedVoice) u2.voice = selectedVoice;
-      u2.onstart = () => setIsSpeaking(true);
-      u2.onend = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(u2);
-      return;
-    }
-
-    // Standard Speech Logic
-    const cleanedText = text
-      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E6}-\u{1F1FF}]/gu, '')
-      .replace(/\s*([,;:.])\s*/g, '$1 ')
-      .trim();
-
-    const utterance = new SpeechSynthesisUtterance(cleanedText);
-    utterance.lang = 'pt-BR';
-
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-      const vName = selectedVoice.name.toLowerCase();
-      if (vName.includes('google') || vName.includes('natural')) {
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-      } else {
-        utterance.rate = 0.88;
-        utterance.pitch = 1.02;
+      if (!response.ok) {
+        throw new Error('Falha ao gerar o áudio');
       }
-    }
 
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      activeAudioRef.current = audio;
+
+      // Extract Laughter Comic Timing
       const t = text.toLowerCase();
       const triggers = ['kkk', 'haha', 'hehe', 'huhu', 'rsrs', 'lol', '(risos)', 'risos', '(risadas)', '😂', '🤣', '😅'];
       let laughIdx = -1;
@@ -306,51 +214,53 @@ export default function Home() {
         }
       }
 
-      if (laughIdx !== -1) {
-        // If laugh is at the beginning (first 30%), laugh immediately while speaking
-        if (laughIdx < t.length * 0.3) {
+      // Audio Event Handlers for 3D Avatar Sync
+      audio.onplay = () => {
+        setIsLoading(false);
+        setIsSpeaking(true);
+        
+        // If laugh trigger is near the beginning of text, laugh immediately
+        if (laughIdx !== -1 && laughIdx < t.length * 0.3) {
            setIsLaughing(true);
         }
-      }
-    };
-    
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setIsLaughing(false); // Safety reset
-      
-      const t = text.toLowerCase();
-      const triggers = ['kkk', 'haha', 'hehe', 'huhu', 'rsrs', 'lol', '(risos)', 'risos', '(risadas)', '😂', '🤣', '😅'];
-      let laughIdx = -1;
-      
-      for (const trig of triggers) {
-        const idx = t.indexOf(trig);
-        if (idx !== -1 && (laughIdx === -1 || idx < laughIdx)) {
-          laughIdx = idx;
-        }
-      }
+      };
 
-      if (laughIdx !== -1) {
-        // If laugh is at the end (punchline), laugh after delivering the joke
-        if (laughIdx >= t.length * 0.3) {
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setIsLaughing(false); // Safety reset
+
+        // If laugh is near the end (punchline), burst laugh now
+        if (laughIdx !== -1 && laughIdx >= t.length * 0.3) {
            setIsLaughing(true);
-           setTimeout(() => setIsLaughing(false), 2500); // 2.5s laugh
+           setTimeout(() => setIsLaughing(false), 2500); // 2.5s duration
         }
-      }
-      
-      if (text.toLowerCase().includes("te ajudar")) {
-        setIsSmiling(true);
-        setTimeout(() => setIsSmiling(false), 2500);
-      }
-    };
-    
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      setIsLaughing(false);
-      setIsSmiling(false);
-    };
+        
+        // Empathy / Satisfaction trigger
+        if (t.includes("te ajudar") || t.includes("ajuda")) {
+          setIsSmiling(true);
+          setTimeout(() => setIsSmiling(false), 2500);
+        }
+        
+        // Cleanup memory properly
+        URL.revokeObjectURL(audioUrl);
+        if (activeAudioRef.current === audio) {
+            activeAudioRef.current = null;
+        }
+      };
 
-    window.speechSynthesis.speak(utterance);
-  }, [selectedVoice, isMuted]);
+      audio.onerror = () => {
+        setIsLoading(false);
+        setIsSpeaking(false);
+      };
+
+      await audio.play();
+
+    } catch (error) {
+      console.error('TTS Error:', error);
+      setIsLoading(false);
+      setIsSpeaking(false);
+    }
+  }, [isMuted, selectedVoiceId]);
 
   // 4. Dynamic System Prompt
   const getSystemPrompt = (currentTone: Tone) => {
@@ -547,9 +457,10 @@ export default function Home() {
   };
 
   const isDark = theme === 'dark';
+  const isFeminine = selectedVoiceId === 'EXAVITQu4vr4xnSDxMaL'; // Bella is the only feminine voice now
 
   return (
-    <main className={`relative h-screen w-full overflow-hidden font-sans selection:bg-blue-500/30 transition-colors duration-1000 ${isDark ? 'bg-[#050505] text-white' : 'bg-[#fafafa] text-black'}`}>
+    <main className={`relative h-screen w-full overflow-hidden font-sans selection:${isFeminine ? 'bg-pink-500/30' : 'bg-blue-500/30'} transition-colors duration-1000 ${isDark ? 'bg-[#050505] text-white' : 'bg-[#fafafa] text-black'}`}>
       {/* Background */}
       <div className={`absolute inset-0 z-0 transition-opacity duration-1000 ${isDark ? 'opacity-100' : 'opacity-0'}`}>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#10101a_0%,_#050505_100%)]" />
@@ -572,6 +483,7 @@ export default function Home() {
                 isLaughing={isLaughing} 
                 isSmiling={isSmiling} 
                 theme={theme}
+                isFeminine={isFeminine}
             />
           </Suspense>
         </Canvas>
@@ -628,7 +540,7 @@ export default function Home() {
                     </svg>
                     <span className="text-[11px] font-medium">{isMuted ? 'Mudo' : 'Com Áudio'}</span>
                   </div>
-                  <div className={`w-8 h-4 rounded-full relative transition-all ${isMuted ? 'bg-white/10' : (isDark ? 'bg-blue-600' : 'bg-blue-500')}`}>
+                  <div className={`w-8 h-4 rounded-full relative transition-all ${isMuted ? 'bg-white/10' : (isDark ? (isFeminine ? 'bg-pink-600' : 'bg-blue-600') : (isFeminine ? 'bg-pink-500' : 'bg-blue-500'))}`}>
                     <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${isMuted ? 'left-0.5' : 'left-4.5'}`} />
                   </div>
                 </button>
@@ -671,30 +583,31 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* Section: Voices */}
+            {/* Section: Voice */}
             <section>
                 <h3 className={`text-[9px] uppercase tracking-[0.2em] font-medium mb-4 ${isDark ? 'text-white/30' : 'text-black/40'}`}>Voz do Assistente</h3>
                 <div className="flex flex-col gap-2">
-                    {voices.length > 0 ? (
-                        voices.map((voice, idx) => (
-                            <button
-                                key={`${voice.name}-${idx}`}
-                                onClick={() => setSelectedVoice(voice)}
-                                className={`text-left p-3 rounded-xl transition-all border ${
-                                    selectedVoice?.name === voice.name 
-                                    ? (isDark ? 'bg-white/10 border-white/20 text-white' : 'bg-black/5 border-black/10 text-black font-semibold') 
-                                    : `border-transparent opacity-40 hover:${isDark ? 'bg-white/5 opacity-60' : 'bg-black/5 opacity-60'}`
-                                }`}
-                            >
-                                <p className="text-[10px] font-medium truncate">{voice.name}</p>
-                                <p className="text-[8px] opacity-40 uppercase tracking-widest mt-1">{voice.lang}</p>
-                            </button>
-                        ))
-                    ) : (
-                        <p className="text-white/20 text-[10px] italic">Buscando vozes...</p>
-                    )}
+                    {ELEVENLABS_VOICES.map((voice) => (
+                        <button
+                            key={voice.id}
+                            onClick={() => setSelectedVoiceId(voice.id)}
+                            className={`text-left p-3 rounded-xl transition-all border ${
+                                selectedVoiceId === voice.id
+                                ? (isDark ? 'bg-white/10 border-white/20 text-white' : 'bg-black/5 border-black/10 text-black font-semibold') 
+                                : `border-transparent opacity-40 hover:${isDark ? 'bg-white/5 opacity-60' : 'bg-black/5 opacity-60'}`
+                            }`}
+                        >
+                            <div className="flex items-center justify-between">
+                                <p className="text-[11px] font-medium">{voice.name}</p>
+                                <span className={`text-[8px] px-2 py-0.5 rounded-full ${voice.gender === 'Feminina' ? (isDark ? 'bg-pink-500/20 text-pink-300' : 'bg-pink-100 text-pink-600') : (isDark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-600')}`}>{voice.gender}</span>
+                            </div>
+                            <p className={`text-[9px] mt-1 ${isDark ? 'opacity-40' : 'opacity-50'}`}>{voice.style}</p>
+                        </button>
+                    ))}
                 </div>
             </section>
+
+
         </div>
       </div>
 
@@ -715,7 +628,7 @@ export default function Home() {
                         <div className={`p-3 rounded-2xl text-[13px] leading-relaxed font-light ${
                             msg.role === 'user' 
                             ? (isDark ? 'bg-white/10 text-white/90 rounded-tr-none' : 'bg-black/5 text-black rounded-tr-none border border-black/5') 
-                            : (isDark ? 'bg-blue-600/20 text-blue-50 border border-blue-500/20 rounded-tl-none shadow-[0_4px_20px_-5px_rgba(59,130,246,0.2)]' : 'bg-blue-500/10 text-blue-700 border border-blue-500/20 rounded-tl-none')
+                            : (isDark ? `${isFeminine ? 'bg-pink-600/20 text-pink-50 border border-pink-500/20' : 'bg-blue-600/20 text-blue-50 border border-blue-500/20'} rounded-tl-none shadow-[0_4px_20px_-5px_${isFeminine ? 'rgba(236,72,153,0.2)' : 'rgba(59,130,246,0.2)'}]` : `${isFeminine ? 'bg-pink-500/10 text-pink-700 border border-pink-500/20' : 'bg-blue-500/10 text-blue-700 border border-blue-500/20'} rounded-tl-none`)
                         }`}>
                             {msg.text}
                         </div>
@@ -738,10 +651,10 @@ export default function Home() {
             {isLoading && (
               <div className="self-start items-start opacity-70 animate-in fade-in duration-300">
                 <span className="text-[8px] opacity-20 uppercase tracking-widest mb-1">Omega</span>
-                <div className={`flex gap-1.5 p-3 rounded-2xl rounded-tl-none border ${isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
-                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.3s] ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
-                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.15s] ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
-                  <div className={`w-1 h-1 rounded-full animate-bounce ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
+                <div className={`flex gap-1.5 p-3 rounded-2xl rounded-tl-none border ${isFeminine ? 'bg-pink-500/10 border-pink-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.3s] ${isDark ? (isFeminine ? 'bg-pink-400' : 'bg-blue-400') : (isFeminine ? 'bg-pink-500' : 'bg-blue-500')}`} />
+                  <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.15s] ${isDark ? (isFeminine ? 'bg-pink-400' : 'bg-blue-400') : (isFeminine ? 'bg-pink-500' : 'bg-blue-500')}`} />
+                  <div className={`w-1 h-1 rounded-full animate-bounce ${isDark ? (isFeminine ? 'bg-pink-400' : 'bg-blue-400') : (isFeminine ? 'bg-pink-500' : 'bg-blue-500')}`} />
                 </div>
               </div>
             )}
@@ -757,7 +670,7 @@ export default function Home() {
                     placeholder="Diga algo..."
                     disabled={isLoading}
                     autoFocus={isRightPanelOpen}
-                    className={`w-full border rounded-2xl px-5 py-4 pr-14 text-sm focus:outline-none transition-all ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-blue-500/50 focus:bg-white/10 placeholder:text-white/20' : 'bg-black/5 border-black/5 text-black focus:border-blue-500/50 focus:bg-white placeholder:text-black/20'}`}
+                    className={`w-full border rounded-2xl px-5 py-4 pr-14 text-sm focus:outline-none transition-all ${isDark ? `bg-white/5 border-white/10 text-white focus:${isFeminine ? 'border-pink-500/50' : 'border-blue-500/50'} focus:bg-white/10 placeholder:text-white/20` : `bg-black/5 border-black/5 text-black focus:${isFeminine ? 'border-pink-500/50' : 'border-blue-500/50'} focus:bg-white placeholder:text-black/20`}`}
                 />
                 <button
                     type="submit"
@@ -765,7 +678,7 @@ export default function Home() {
                     className={`absolute right-2 top-1/2 -translate-y-1/2 p-2.5 rounded-xl transition-all duration-300 ${
                         !inputValue.trim() || isLoading 
                         ? 'opacity-10' 
-                        : (isDark ? 'text-blue-400 hover:bg-blue-500/20 hover:text-blue-300' : 'text-blue-500 hover:bg-blue-500/10')
+                        : (isDark ? `${isFeminine ? 'text-pink-400 hover:bg-pink-500/20 hover:text-pink-300' : 'text-blue-400 hover:bg-blue-500/20 hover:text-blue-300'}` : `${isFeminine ? 'text-pink-500 hover:bg-pink-500/10' : 'text-blue-500 hover:bg-blue-500/10'}`)
                     }`}
                 >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5">
@@ -777,7 +690,7 @@ export default function Home() {
                 <p className={`text-[8px] uppercase tracking-widest opacity-20`}>Pressione Enter</p>
                 <div className="flex gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'opacity-10 bg-current'}`} title="Status Microfone" />
-                    <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? 'bg-blue-500 animate-pulse' : 'opacity-10 bg-current'}`} title="Status IA" />
+                    <div className={`w-1.5 h-1.5 rounded-full ${isLoading ? (isFeminine ? 'bg-pink-500 animate-pulse' : 'bg-blue-500 animate-pulse') : 'opacity-10 bg-current'}`} title="Status IA" />
                 </div>
             </div>
         </div>
@@ -837,7 +750,7 @@ export default function Home() {
           >
             {/* Processing indicator (Ring) */}
             {(isSpeaking || isLoading) && (
-              <div className={`absolute inset-0 rounded-full border-t-2 border-r-transparent border-b-transparent border-l-transparent animate-spin ${isDark ? 'border-blue-500' : 'border-blue-500'}`} />
+              <div className={`absolute inset-0 rounded-full border-t-2 border-r-transparent border-b-transparent border-l-transparent animate-spin ${isFeminine ? 'border-pink-500' : 'border-blue-500'}`} />
             )}
 
             <span className={`w-8 h-8 flex items-center justify-center transition-all ${isListening ? 'animate-pulse scale-125' : ''}`}>
