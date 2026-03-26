@@ -724,7 +724,9 @@ export default function Home() {
             ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 border ${isDark ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/5'}`}>
-                        <span className="text-xl opacity-20">💬</span>
+                        <svg width="24" height="24" viewBox="0 0 640 640" className="opacity-20" style={{ fill: isDark ? 'white' : 'black' }}>
+                            <path d="M416 208C416 305.2 330 384 224 384C197.3 384 171.9 379 148.8 370L67.2 413.2C57.9 418.1 46.5 416.4 39 409C31.5 401.6 29.8 390.1 34.8 380.8L70.4 313.6C46.3 284.2 32 247.6 32 208C32 110.8 118 32 224 32C330 32 416 110.8 416 208zM416 576C321.9 576 243.6 513.9 227.2 432C347.2 430.5 451.5 345.1 463 229.3C546.3 248.5 608 317.6 608 400C608 439.6 593.7 476.2 569.6 505.6L605.2 572.8C610.1 582.1 608.4 593.5 601 601C593.6 608.5 582.1 610.2 572.8 605.2L491.2 562C468.1 571 442.7 576 416 576z" />
+                        </svg>
                     </div>
                     <p className={`text-[10px] uppercase tracking-[0.2em] leading-relaxed opacity-20`}>
                         Inicie uma conversa via voz ou texto abaixo.
