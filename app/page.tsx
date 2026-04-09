@@ -111,6 +111,7 @@ export default function Home() {
   const [tone, setTone] = useState<Tone>('default');
   const [theme, setTheme] = useState<Theme>('dark');
   const [selectedVoiceId, setSelectedVoiceId] = useState('EXAVITQu4vr4xnSDxMaL');
+  const [isAlienMode, setIsAlienMode] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -133,12 +134,14 @@ export default function Home() {
         const savedName = localStorage.getItem('omega_name');
         const savedMuted = localStorage.getItem('omega_muted');
         const savedVoice = localStorage.getItem('omega_voiceId');
+        const savedAlien = localStorage.getItem('omega_alienMode');
         
         if (savedTone) setTone(savedTone);
         if (savedTheme) setTheme(savedTheme);
         if (savedName) setAssistantNameState(savedName);
         if (savedMuted) setIsMuted(savedMuted === 'true');
         if (savedVoice) setSelectedVoiceId(savedVoice);
+        if (savedAlien) setIsAlienMode(savedAlien === 'true');
         
         isLoaded.current = true;
     }
@@ -152,8 +155,9 @@ export default function Home() {
         localStorage.setItem('omega_name', assistantNameState);
         localStorage.setItem('omega_muted', String(isMuted));
         localStorage.setItem('omega_voiceId', selectedVoiceId);
+        localStorage.setItem('omega_alienMode', String(isAlienMode));
     }
-  }, [tone, theme, assistantNameState, isMuted, selectedVoiceId]);
+  }, [tone, theme, assistantNameState, isMuted, selectedVoiceId, isAlienMode]);
 
   // Auto-scroll chat history
   useEffect(() => {
@@ -484,6 +488,7 @@ export default function Home() {
                 isSmiling={isSmiling} 
                 theme={theme}
                 isFeminine={isFeminine}
+                isAlienMode={isAlienMode}
             />
           </Suspense>
         </Canvas>
@@ -581,6 +586,22 @@ export default function Home() {
                         </button>
                     ))}
                 </div>
+            </section>
+
+            <section>
+                <h3 className={`text-[9px] uppercase tracking-[0.2em] font-medium mb-4 ${isDark ? 'text-white/30' : 'text-black/40'}`}>Modo do Assistente</h3>
+                <button 
+                  onClick={() => setIsAlienMode(!isAlienMode)}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${isAlienMode ? 'opacity-100' : 'opacity-60'} ${isDark ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-black/5 border-black/10 hover:bg-black/10'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{isAlienMode ? '👽' : '👤'}</span>
+                    <span className="text-[11px] font-medium">{isAlienMode ? 'Modo Alienígena' : 'Original'}</span>
+                  </div>
+                  <div className={`w-8 h-4 rounded-full relative transition-all ${isAlienMode ? (isDark ? 'bg-green-600' : 'bg-green-500') : 'bg-white/10'}`}>
+                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${isAlienMode ? 'left-4.5' : 'left-0.5'}`} />
+                  </div>
+                </button>
             </section>
 
             {/* Section: Voice */}
