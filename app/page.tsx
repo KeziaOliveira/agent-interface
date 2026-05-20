@@ -116,6 +116,8 @@ export default function Home() {
   const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isLoaded = useRef(false);
+  const clickCountRef = useRef(0);
+  const lastClickTimeRef = useRef(0);
 
   // Randomized fallback responses for better personality
   const fallbackResponses = [
@@ -476,6 +478,21 @@ export default function Home() {
         onClick={() => {
             if (isLeftPanelOpen) setIsLeftPanelOpen(false);
             if (isRightPanelOpen) setIsRightPanelOpen(false);
+
+            // Easter Egg: Rir ao clicar rapidamente 5 vezes na tela
+            const now = Date.now();
+            if (now - lastClickTimeRef.current > 2000) {
+              clickCountRef.current = 1;
+            } else {
+              clickCountRef.current += 1;
+            }
+            lastClickTimeRef.current = now;
+
+            if (clickCountRef.current >= 5) {
+              clickCountRef.current = 0; // Reset
+              setIsLaughing(true);
+              setTimeout(() => setIsLaughing(false), 3000);
+            }
         }}
       >
         <Canvas camera={{ position: [0, 0, 3], fov: 40 }}>
