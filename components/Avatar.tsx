@@ -304,19 +304,19 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
               {/* Minimal Thin Mouth */}
               <group position={[0, -0.22, 0]}>
                 <mesh ref={torusRef}>
-                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                  <meshBasicMaterial color="#000000" opacity={0.7} transparent />
                 </mesh>
                 <mesh ref={leftCapRef}>
                   <sphereGeometry args={[0.05, 16, 16]} />
-                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                  <meshBasicMaterial color="#000000" opacity={0.7} transparent />
                 </mesh>
                 <mesh ref={rightCapRef}>
                   <sphereGeometry args={[0.05, 16, 16]} />
-                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                  <meshBasicMaterial color="#000000" opacity={0.7} transparent />
                 </mesh>
                 <mesh ref={laughMouthRef} visible={false}>
                   <shapeGeometry args={[laughShape]} />
-                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                  <meshBasicMaterial color="#000000" />
                 </mesh>
               </group>
             </group>
