@@ -23,14 +23,16 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
   const leftCapRef = useRef<Mesh>(null);
   const rightCapRef = useRef<Mesh>(null);
   const laughMouthRef = useRef<Mesh>(null);
+  const leftArmRef = useRef<Mesh>(null);
+  const rightArmRef = useRef<Mesh>(null);
 
   const [isBlinking, setIsBlinking] = useState(false);
   const blinkTimer = useRef(0);
   const nextBlink = useRef(2 + Math.random() * 3);
 
   // Dynamic color based on mode and voice
-  const materialColor = isAlienMode 
-    ? '#a8ff3e' 
+  const materialColor = isAlienMode
+    ? (isFeminine ? '#d4ff80' : '#a8ff3e') // Softer lime/mint if feminine
     : (theme === 'light' ? (isFeminine ? '#ec4899' : '#3b82f6') : 'white');
 
   // Tapered Almond Eye Shape
@@ -87,7 +89,7 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
     // 2. Head Rotation (Mouse follow)
     const targetRotX = (state.mouse.y * Math.PI) / 10;
     const targetRotY = (state.mouse.x * Math.PI) / 8;
-    
+
     // Apply rotation only to head in Alien Mode, or to full group in Human Mode
     const activeRotateRef = isAlienMode ? headGroupRef.current : groupRef.current;
     if (activeRotateRef) {
@@ -98,49 +100,49 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
     // 3. Floating (Only Human Mode)
     let posY = 0;
     if (!isAlienMode) {
-      const floatFreq = 1.8 + (isSpeaking ? 0.7 : 0); 
+      const floatFreq = 1.8 + (isSpeaking ? 0.7 : 0);
       const floatAmp = 0.12 + (isSpeaking ? 0.03 : 0) + (laughVal * 0.01);
       posY = Math.sin(time * floatFreq) * floatAmp;
       if (laughVal > 0.01) {
-        posY += Math.sin(time * 4) * 0.005 * laughVal; 
+        posY += Math.sin(time * 4) * 0.005 * laughVal;
       }
       groupRef.current.position.y = posY;
     } else {
-        // Reset full group pos/rot if switched
-        groupRef.current.position.x = 0;
-        groupRef.current.position.y = 0;
-        groupRef.current.rotation.set(0,0,0);
-        
-        // Fix head position (no more floating)
-        if (headGroupRef.current) {
-            headGroupRef.current.position.y = 0.05;
-        }
+      // Reset full group pos/rot if switched
+      groupRef.current.position.x = 0;
+      groupRef.current.position.y = 0;
+      groupRef.current.rotation.set(0, 0, 0);
+
+      // Fix head position (no more floating)
+      if (headGroupRef.current) {
+        headGroupRef.current.position.y = 0.05;
+      }
     }
 
     // 4. Mouth Toggling & Animation
     const showLaugh = laughVal > 0.6;
     const showSmile = isSmiling && !isLaughing;
     const showFilledMouth = showLaugh || showSmile;
-    
+
     if (torusRef.current) torusRef.current.visible = !showFilledMouth;
     if (leftCapRef.current) leftCapRef.current.visible = !showFilledMouth;
     if (rightCapRef.current) rightCapRef.current.visible = !showFilledMouth;
-    
+
     if (laughMouthRef.current) {
-        laughMouthRef.current.visible = showFilledMouth;
-        if (showLaugh) {
-          const squash = 1 + Math.sin(time * 3) * 0.02 * laughVal;
-          laughMouthRef.current.scale.set(1 + (1 - squash) * 0.5, squash, 1);
-          laughMouthRef.current.position.y = Math.sin(time * 12) * 0.02 * laughVal;
-        } else {
-          laughMouthRef.current.scale.set(1, 1, 1);
-          laughMouthRef.current.position.y = 0;
-        }
+      laughMouthRef.current.visible = showFilledMouth;
+      if (showLaugh) {
+        const squash = 1 + Math.sin(time * 3) * 0.02 * laughVal;
+        laughMouthRef.current.scale.set(1 + (1 - squash) * 0.5, squash, 1);
+        laughMouthRef.current.position.y = Math.sin(time * 12) * 0.02 * laughVal;
+      } else {
+        laughMouthRef.current.scale.set(1, 1, 1);
+        laughMouthRef.current.position.y = 0;
+      }
     }
 
     // Mouth Morphing
     let targetMorph = isSpeaking && !showFilledMouth
-      ? 0.5 + Math.abs(Math.sin(time * 12)) * 0.5 
+      ? 0.5 + Math.abs(Math.sin(time * 12)) * 0.5
       : Math.abs(Math.sin(time * 2)) * 0.05;
 
     animState.current.morphFactor = MathUtils.lerp(animState.current.morphFactor, targetMorph, 0.2);
@@ -181,10 +183,18 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
     }
 
     if (leftEyeRef.current && rightEyeRef.current) {
-      const squintFactor = 1 - (laughVal * 0.35); 
+      const squintFactor = 1 - (laughVal * 0.35);
       const targetScaleY = isBlinking ? 0.05 : squintFactor;
       leftEyeRef.current.scale.y = MathUtils.lerp(leftEyeRef.current.scale.y, targetScaleY, 0.4);
       rightEyeRef.current.scale.y = MathUtils.lerp(rightEyeRef.current.scale.y, targetScaleY, 0.4);
+    }
+
+    // 6. Arms (Alien Mode) - Keep them still as requested
+    if (leftArmRef.current && rightArmRef.current && isAlienMode) {
+      leftArmRef.current.rotation.z = -0.25;
+      rightArmRef.current.rotation.z = 0.25;
+      leftArmRef.current.position.y = -1.0;
+      rightArmRef.current.position.y = -1.0;
     }
   });
 
@@ -194,86 +204,129 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
       {/* --------------------- ALIEN MODE (2D Stylized) --------------------- */}
       {isAlienMode && (
         <group>
-            {/* Fixed Body Base (No Arms) */}
-            <group ref={bodyGroupRef}>
-                {/* Crescent Shoulders (Wider) */}
-                {/* <mesh position={[0, -0.65, 0]}>
+          {/* Fixed Body Base (No Arms) */}
+          <group ref={bodyGroupRef}>
+            {/* Crescent Shoulders (Wider) */}
+            {/* <mesh position={[0, -0.65, 0]}>
                     <torusGeometry args={[0.23, 0.05, 160, 100, Math.PI]} />
                     <meshBasicMaterial color={materialColor} />
                 </mesh> */}
-                {/* Smooth Torso (Wider) */}
-                <mesh position={[0, -0.9, 0]} scale={[1.3, 1, 1]}>
-                    <capsuleGeometry args={[0.25, 0.4, 50, 16]} />
-                    <meshBasicMaterial color={materialColor} />
-                </mesh>
-            </group>
+            {/* Smooth Torso (Wider) */}
+            <mesh position={[0, -0.9, 0]} scale={[1.3, 1, 1]}>
+              <capsuleGeometry args={[0.25, 0.4, 50, 16]} />
+              <meshBasicMaterial color={materialColor} />
+            </mesh>
 
-            {/* Rotating Head */}
-            <group ref={headGroupRef}>
-                {/* The Teardrop Head */}
-                <mesh position={[0, 0, 0]}>
-                    <shapeGeometry args={[teardropShape]} />
-                    <meshBasicMaterial color={materialColor} side={2} />
-                </mesh>
+            {/* Simple 2D Arms */}
+            <mesh ref={leftArmRef} position={[-0.345, -1.0, 0]} rotation={[0, 0, -0.25]}>
+              <capsuleGeometry args={[0.06, 0.6, 16, 16]} />
+              <meshBasicMaterial color={materialColor} />
+            </mesh>
+            <mesh ref={rightArmRef} position={[0.345, -1.0, 0]} rotation={[0, 0, 0.25]}>
+              <capsuleGeometry args={[0.06, 0.6, 16, 16]} />
+              <meshBasicMaterial color={materialColor} />
+            </mesh>
+          </group>
 
-                {/* Facial Features (Layered in front) */}
-                <group position={[0, 0.10, 0.02]}> 
-                    {/* Eyebrows (Horizontal Curved Arcs) */}
-                    <mesh position={[-0.18, 0.03, 0]} rotation={[0, 0, Math.PI / 4 + 0.3]}>
-                        <torusGeometry args={[0.08, 0.006, 8, 32, Math.PI / 3]} />
-                        <meshBasicMaterial color="#000000" opacity={0.6} transparent />
-                    </mesh>
-                    <mesh position={[0.18, 0.04, 0]} rotation={[10, 0, -Math.PI / 4 - 0.3 - Math.PI / 3]}>
-                        <torusGeometry args={[0.08, 0.006, 8, 32, Math.PI / 3]} />
-                        <meshBasicMaterial color="#000000" opacity={0.6} transparent />
-                    </mesh>
+          {/* Rotating Head */}
+          <group ref={headGroupRef}>
+            {/* The Teardrop Head */}
+            <mesh position={[0, 0, 0]}>
+              <shapeGeometry args={[teardropShape]} />
+              <meshBasicMaterial color={materialColor} side={2} />
+            </mesh>
 
-                    {/* Tapered Almond Eyes (Adjusted Rotation) */}
-                    <group position={[0, -0.05, 0]}>
-                        <mesh 
-                            ref={leftEyeRef} 
-                            position={[-0.19, 0, 0]} 
-                            rotation={[0, 0, -0.65]}
-                        >
-                            <shapeGeometry args={[almondEyeShape]} />
-                            <meshBasicMaterial color="#000000" />
-                        </mesh>
-                        <mesh 
-                            ref={rightEyeRef} 
-                            position={[0.19, 0, 0]} 
-                            rotation={[0, 0, 0.65]}
-                        >
-                            <shapeGeometry args={[almondEyeShape]} />
-                            <meshBasicMaterial color="#000000" />
-                        </mesh>
-                    </group>
+            {/* Facial Features (Layered in front) */}
+            <group position={[0, 0.10, 0.02]}>
+              {/* Eyebrows (Horizontal Curved Arcs) */}
+              <mesh position={[-0.18, 0.03, 0]} rotation={[0, 0, Math.PI / 4 + 0.3]}>
+                <torusGeometry args={[0.08, 0.006, 8, 32, Math.PI / 3]} />
+                <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+              </mesh>
+              <mesh position={[0.18, 0.04, 0]} rotation={[10, 0, -Math.PI / 4 - 0.3 - Math.PI / 3]}>
+                <torusGeometry args={[0.08, 0.006, 8, 32, Math.PI / 3]} />
+                <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+              </mesh>
 
-                    {/* Minimal Thin Mouth */}
-                    <group position={[0, -0.22, 0]}>
-                        <mesh ref={torusRef}>
-                            <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+              {/* Tapered Almond Eyes (Adjusted Rotation) */}
+              <group position={[0, -0.05, 0]}>
+                {/* Left Eye Group */}
+                <group position={[-0.19, 0, 0]} rotation={[0, 0, -0.65]}>
+                  <mesh ref={leftEyeRef}>
+                    <shapeGeometry args={[almondEyeShape]} />
+                    <meshBasicMaterial color="#000000" />
+                    {/* Eyelashes Left */}
+                    {isFeminine && (
+                      <group position={[0, 0.07, 0.001]}>
+                        <mesh position={[-0.119, -0.024, 0]} rotation={[0, 0.5, 3.45]}>
+                          <torusGeometry args={[0.05, 0.004, 8, 32, Math.PI / 4]} />
+                          <meshBasicMaterial color="#000000" />
                         </mesh>
-                        <mesh ref={leftCapRef}>
-                            <sphereGeometry args={[0.05, 16, 16]} />
-                            <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                        <mesh position={[-0.059, -0.0004, 0]} rotation={[0, 0, 3.25]}>
+                          <torusGeometry args={[0.06, 0.004, 8, 32, Math.PI / 4]} />
+                          <meshBasicMaterial color="#000000" />
                         </mesh>
-                        <mesh ref={rightCapRef}>
-                            <sphereGeometry args={[0.05, 16, 16]} />
-                            <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                        <mesh position={[0.000008, -0.00005, 0]} rotation={[0, 0, 2.75]}>
+                          <torusGeometry args={[0.05, 0.004, 8, 32, Math.PI / 4]} />
+                          <meshBasicMaterial color="#000000" />
                         </mesh>
-                        <mesh ref={laughMouthRef} visible={false}>
-                            <shapeGeometry args={[laughShape]} />
-                            <meshBasicMaterial color="#000000" opacity={0.6} transparent />
-                        </mesh>
-                    </group>
+                      </group>
+                    )}
+                  </mesh>
                 </group>
+
+                {/* Right Eye Group */}
+                <group position={[0.19, 0, 0]} rotation={[0, 0, 0.65]}>
+                  <mesh ref={rightEyeRef}>
+                    <shapeGeometry args={[almondEyeShape]} />
+                    <meshBasicMaterial color="#000000" />
+                    {/* Eyelashes Right */}
+                    {isFeminine && (
+                      <group position={[0, 0.07, 0.001]}>
+                        <mesh position={[0.119, -0.024, 0]} rotation={[0, -0.5, -1.1]}>
+                          <torusGeometry args={[0.05, 0.004, 8, 32, Math.PI / 4]} />
+                          <meshBasicMaterial color="#000000" />
+                        </mesh>
+                        <mesh position={[0.059, -0.0004, 0]} rotation={[0, 0, -0.9]}>
+                          <torusGeometry args={[0.06, 0.004, 8, 32, Math.PI / 4]} />
+                          <meshBasicMaterial color="#000000" />
+                        </mesh>
+                        <mesh position={[-0.000008, -0.00005, 0]} rotation={[0, 0, -0.4]}>
+                          <torusGeometry args={[0.05, 0.004, 8, 32, Math.PI / 4]} />
+                          <meshBasicMaterial color="#000000" />
+                        </mesh>
+                      </group>
+                    )}
+                  </mesh>
+                </group>
+              </group>
+
+              {/* Minimal Thin Mouth */}
+              <group position={[0, -0.22, 0]}>
+                <mesh ref={torusRef}>
+                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                </mesh>
+                <mesh ref={leftCapRef}>
+                  <sphereGeometry args={[0.05, 16, 16]} />
+                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                </mesh>
+                <mesh ref={rightCapRef}>
+                  <sphereGeometry args={[0.05, 16, 16]} />
+                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                </mesh>
+                <mesh ref={laughMouthRef} visible={false}>
+                  <shapeGeometry args={[laughShape]} />
+                  <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                </mesh>
+              </group>
             </group>
+          </group>
         </group>
       )}
 
       {/* --------------------- HUMAN MODE (Original 3D) --------------------- */}
       {!isAlienMode && (
-         <group>
+        <group>
           {/* Eyes */}
           <mesh ref={leftEyeRef} position={[-0.13, 0.17, 0]}>
             <capsuleGeometry args={[0.05, 0.15, 8, 16]} />
