@@ -32,8 +32,11 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
 
   // Dynamic color based on mode and voice
   const materialColor = isAlienMode
-    ? (isFeminine ? '#d4ff80' : '#a8ff3e') // Softer lime/mint if feminine
+    ? (isFeminine ? '#86EC2B' : '#a8ff3e') // Cheerful apple green if feminine, neon lime if masculine
     : (theme === 'light' ? (isFeminine ? '#ec4899' : '#3b82f6') : 'white');
+
+  // Premium dark forest green for the alien's mouth (high contrast, distinct from skin and eyes)
+  const alienMouthColor = isFeminine ? '#0f5127' : '#166534';
 
   // Tapered Almond Eye Shape
   const almondEyeShape = useMemo(() => {
@@ -130,12 +133,13 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
 
     if (laughMouthRef.current) {
       laughMouthRef.current.visible = showFilledMouth;
+      const baseScale = isAlienMode ? 0.48 : 1.0;
       if (showLaugh) {
         const squash = 1 + Math.sin(time * 3) * 0.02 * laughVal;
-        laughMouthRef.current.scale.set(1 + (1 - squash) * 0.5, squash, 1);
+        laughMouthRef.current.scale.set(baseScale * (1 + (1 - squash) * 0.5), baseScale * squash, 1);
         laughMouthRef.current.position.y = Math.sin(time * 12) * 0.02 * laughVal;
       } else {
-        laughMouthRef.current.scale.set(1, 1, 1);
+        laughMouthRef.current.scale.set(baseScale, baseScale, 1);
         laughMouthRef.current.position.y = 0;
       }
     }
@@ -166,7 +170,7 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
       const rightAngle = -Math.PI / 2 + angleOffset;
       leftCapRef.current.position.set(r * Math.cos(leftAngle), r * Math.sin(leftAngle), 0);
       rightCapRef.current.position.set(r * Math.cos(rightAngle), r * Math.sin(rightAngle), 0);
-      const capScale = isAlienMode ? 0.3 : 1;
+      const capScale = 1; // Since circleGeometry is already defined with correct radius, keep scale at 1
       leftCapRef.current.scale.set(capScale, capScale, capScale);
       rightCapRef.current.scale.set(capScale, capScale, capScale);
     }
@@ -237,15 +241,15 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
             </mesh>
 
             {/* Facial Features (Layered in front) */}
-            <group position={[0, 0.10, 0.02]}>
+            <group position={[0, 0.10, 0.07]}>
               {/* Eyebrows (Horizontal Curved Arcs) */}
               <mesh position={[-0.18, 0.03, 0]} rotation={[0, 0, Math.PI / 4 + 0.3]}>
                 <torusGeometry args={[0.08, 0.006, 8, 32, Math.PI / 3]} />
-                <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                <meshBasicMaterial color="#000000" opacity={0.6} transparent depthTest={false} />
               </mesh>
               <mesh position={[0.18, 0.04, 0]} rotation={[10, 0, -Math.PI / 4 - 0.3 - Math.PI / 3]}>
                 <torusGeometry args={[0.08, 0.006, 8, 32, Math.PI / 3]} />
-                <meshBasicMaterial color="#000000" opacity={0.6} transparent />
+                <meshBasicMaterial color="#000000" opacity={0.6} transparent depthTest={false} />
               </mesh>
 
               {/* Tapered Almond Eyes (Adjusted Rotation) */}
@@ -304,19 +308,20 @@ export default function Avatar({ isSpeaking = false, isLaughing = false, isSmili
               {/* Minimal Thin Mouth */}
               <group position={[0, -0.22, 0]}>
                 <mesh ref={torusRef}>
-                  <meshBasicMaterial color="#000000" opacity={0.7} transparent />
+                  <torusGeometry args={[0.12, 0.015, 12, 48, Math.PI * 0.7]} />
+                  <meshBasicMaterial color={alienMouthColor} transparent depthTest={false} />
                 </mesh>
                 <mesh ref={leftCapRef}>
-                  <sphereGeometry args={[0.05, 16, 16]} />
-                  <meshBasicMaterial color="#000000" opacity={0.7} transparent />
+                  <circleGeometry args={[0.015, 16]} />
+                  <meshBasicMaterial color={alienMouthColor} transparent depthTest={false} />
                 </mesh>
                 <mesh ref={rightCapRef}>
-                  <sphereGeometry args={[0.05, 16, 16]} />
-                  <meshBasicMaterial color="#000000" opacity={0.7} transparent />
+                  <circleGeometry args={[0.015, 16]} />
+                  <meshBasicMaterial color={alienMouthColor} transparent depthTest={false} />
                 </mesh>
                 <mesh ref={laughMouthRef} visible={false}>
                   <shapeGeometry args={[laughShape]} />
-                  <meshBasicMaterial color="#000000" />
+                  <meshBasicMaterial color={alienMouthColor} transparent depthTest={false} />
                 </mesh>
               </group>
             </group>
