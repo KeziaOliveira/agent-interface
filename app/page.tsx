@@ -104,7 +104,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   
   // NEW: Settings States
-  const [assistantNameState, setAssistantNameState] = useState('Omega');
+  const [assistantNameState, setAssistantNameState] = useState('Agente Glenso');
   const [isMuted, setIsMuted] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -645,7 +645,7 @@ export default function Home() {
             {messages.length > 0 ? (
                 messages.map((msg, i) => (
                     <div key={msg.timestamp + i} className={`max-w-[90%] flex flex-col ${msg.role === 'user' ? 'self-end items-end' : 'self-start items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                        <span className="text-[8px] opacity-20 uppercase tracking-widest mb-1">{msg.role === 'user' ? 'Você' : 'Omega'}</span>
+                        <span className="text-[8px] opacity-20 uppercase tracking-widest mb-1">{msg.role === 'user' ? 'Você' : assistantNameState}</span>
                         <div className={`p-3 rounded-2xl text-[13px] leading-relaxed font-light ${
                             msg.role === 'user' 
                             ? (isDark ? 'bg-white/10 text-white/90 rounded-tr-none' : 'bg-black/5 text-black rounded-tr-none border border-black/5') 
@@ -671,7 +671,7 @@ export default function Home() {
             {/* Loading Indicator */}
             {isLoading && (
               <div className="self-start items-start opacity-70 animate-in fade-in duration-300">
-                <span className="text-[8px] opacity-20 uppercase tracking-widest mb-1">Omega</span>
+                <span className="text-[8px] opacity-20 uppercase tracking-widest mb-1">{assistantNameState}</span>
                 <div className={`flex gap-1.5 p-3 rounded-2xl rounded-tl-none border ${isFeminine ? 'bg-pink-500/10 border-pink-500/20' : 'bg-blue-500/10 border-blue-500/20'}`}>
                   <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.3s] ${isDark ? (isFeminine ? 'bg-pink-400' : 'bg-blue-400') : (isFeminine ? 'bg-pink-500' : 'bg-blue-500')}`} />
                   <div className={`w-1 h-1 rounded-full animate-bounce [animation-delay:-0.15s] ${isDark ? (isFeminine ? 'bg-pink-400' : 'bg-blue-400') : (isFeminine ? 'bg-pink-500' : 'bg-blue-500')}`} />
@@ -788,7 +788,7 @@ export default function Home() {
               )}
             </span>
             <p className={`absolute -bottom-8 whitespace-nowrap text-[9px] uppercase tracking-[0.3em] font-light opacity-20`}>
-                {isListening ? 'Escutando...' : (isSpeaking || isLoading) ? 'Omega processando' : 'Falar'}
+                {isListening ? 'Escutando...' : (isSpeaking || isLoading) ? `${assistantNameState} processando` : 'Falar'}
             </p>
           </button>
         </div>
